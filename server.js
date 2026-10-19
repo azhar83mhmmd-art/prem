@@ -50,6 +50,7 @@ const BLOCKED = ['server.js', 'package.json', 'package-lock.json', 'vercel.json'
 const PAGES = new Set(['/', '/index', '/premium', '/panduan', '/rating', '/ulasan', '/bukti', '/biodata', '/room']);
 const ADMIN_PAGE = '/admin';
 // v4.8: halaman Bypass Link (/bypass -> bypass.html) + proxy API
+const APP_VERSION = '4.8.1';
 const BYPASS_PAGE = '/bypass';
 const BYPASS_UPSTREAM = process.env.BYPASS_UPSTREAM || 'https://apiii-xrina.my.id/tools/bypassv2';
 // Batas permintaan bypass per IP dalam 5 menit
@@ -1293,6 +1294,7 @@ const server = http.createServer(async (req, res) => {
 
     if (pathname === '/api/visitor') return handleVisitor(req, res);
     if (pathname === '/api/bypass') return await handleBypass(req, res, url);
+    if (pathname === '/api/version') return sendJson(res, 200, { app: 'AM Premify', version: APP_VERSION, bypass: true });
     if (pathname === '/api/chat') return await handleChatGet(req, res, url);
     if (pathname === '/api/chat/unread') return await handleChatUnread(req, res);
     if (pathname === '/api/social/stats') return await handleSocialStats(req, res, url);
@@ -1314,7 +1316,9 @@ const server = http.createServer(async (req, res) => {
     }
 
     // Halaman Bypass Link: /bypass -> bypass.html
-    if (pathname === BYPASS_PAGE) return serveFile(res, '/bypass.html');
+    if (pathname.replace(/\/+$/, '').toLowerCase() === BYPASS_PAGE) {
+      return serveFile(res, '/bypass.html', () => sendJson(res, 404, { error: 'bypass.html tidak ditemukan. Pastikan file bypass.html ada di folder public (sejajar index.html).' }));
+    }
 
     // URL bersih: /index.html -> /index
     if (pathname.endsWith('.html')) {
