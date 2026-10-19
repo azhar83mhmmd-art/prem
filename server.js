@@ -47,10 +47,10 @@ const PUBLIC_DIR = fs.existsSync(path.join(__dirname, 'public'))
 const BLOCKED = ['server.js', 'package.json', 'package-lock.json', 'vercel.json', 'supabase.sql'];
 
 // URL bersih (tanpa .html) -> semuanya dilayani oleh index.html
-const PAGES = new Set(['/', '/index', '/premium', '/panduan', '/rating', '/ulasan', '/bukti', '/biodata', '/room']);
+const PAGES = new Set(['/', '/index', '/premium', '/panduan', '/rating', '/ulasan', '/bukti', '/biodata', '/room', '/bypass']);
 const ADMIN_PAGE = '/admin';
-// v4.8: halaman Bypass Link (/bypass -> bypass.html) + proxy API
-const APP_VERSION = '4.8.1';
+// v4.9: menu Bypass Link (view di index, /bypass) + proxy API
+const APP_VERSION = '4.9.0';
 const BYPASS_PAGE = '/bypass';
 const BYPASS_UPSTREAM = process.env.BYPASS_UPSTREAM || 'https://apiii-xrina.my.id/tools/bypassv2';
 // Batas permintaan bypass per IP dalam 5 menit
@@ -1315,18 +1315,13 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
-    // Halaman Bypass Link: /bypass -> bypass.html
-    if (pathname.replace(/\/+$/, '').toLowerCase() === BYPASS_PAGE) {
-      return serveFile(res, '/bypass.html', () => sendJson(res, 404, { error: 'bypass.html tidak ditemukan. Pastikan file bypass.html ada di folder public (sejajar index.html).' }));
-    }
-
     // URL bersih: /index.html -> /index
     if (pathname.endsWith('.html')) {
       const clean = pathname.replace(/\.html$/, '');
       return redirect(res, 301, (clean === '/index' || clean === '' ? '/index' : clean) + (search || ''));
     }
 
-    if (PAGES.has(pathname)) return serveFile(res, '/index.html');
+    if (PAGES.has(pathname.replace(/(.)\/+$/, '$1'))) return serveFile(res, '/index.html');
 
     // Aset statis; halaman tak dikenal (tanpa ekstensi) diarahkan ke /index
     return serveFile(res, pathname, () => {
