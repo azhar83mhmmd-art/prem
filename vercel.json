@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/bypass",
-      "destination": "/bypass.html"
+      "destination": "/index.html"
     },
     {
       "source": "/premium",
