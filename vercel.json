@@ -2,6 +2,10 @@
   "cleanUrls": true,
   "rewrites": [
     {
+      "source": "/bypass",
+      "destination": "/bypass.html"
+    },
+    {
       "source": "/premium",
       "destination": "/index.html"
     },
