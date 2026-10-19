@@ -1,43 +1,40 @@
-/* AM Premify - Bypass Link (/bypass)
+/* AM Premify - Menu Bypass (view di dalam index)
    Alur: tempel link -> /api/bypass (proxy server) -> apiii-xrina.my.id/tools/bypassv2
-   Jika proxy server tidak ada (hosting statis), otomatis mencoba langsung ke API. */
+   Jika proxy server tidak ada (server lama / hosting statis), otomatis mencoba langsung ke API. */
 (() => {
   'use strict';
 
-  const $ = (s, r = document) => r.querySelector(s);
+  const root = document.getElementById('bp-view');
+  if (!root) return;
+  const $ = (s) => root.querySelector(s);
   const API_LOCAL = '/api/bypass';
   const API_UPSTREAM = 'https://apiii-xrina.my.id/tools/bypassv2';
   const HKEY = 'am_bypass_hist';
+  const CKEY = 'am_bypass_count';
   const HMAX = 10;
 
   const store = {
     get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
   };
-
-  /* ---------- Toast ---------- */
-  let toastTimer;
-  function toast(msg, type) {
-    const t = $('#toast');
-    if (!t) return;
-    t.textContent = msg;
-    t.className = 'toast show ' + (type || '');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => (t.className = 'toast'), 2600);
-  }
+  const say = (msg, type) => {
+    if (typeof toast === 'function') return toast(msg, type || '');
+    const t = document.getElementById('toast'); if (!t) return;
+    t.textContent = msg; t.className = 'toast show ' + (type || '');
+    setTimeout(() => (t.className = 'toast'), 2400);
+  };
+  const party = () => { try { if (typeof FX !== 'undefined' && FX.confetti) FX.confetti(); } catch {} };
 
   /* ---------- Terminal ---------- */
   const term = {
-    body: $('#term-body'),
+    body: $('#bp-term-body'),
     lines: [],
     log(type, msg) {
       const ts = new Date().toLocaleTimeString('id-ID', { hour12: false });
-      const ln = document.createElement('div');
-      ln.className = 'ln ' + type;
+      const ln = document.createElement('div'); ln.className = 'ln ' + type;
       const a = document.createElement('span'); a.className = 'ts'; a.textContent = '[' + ts + ']';
       const b = document.createElement('span'); b.className = 'msg'; b.textContent = msg;
-      ln.append(a, b);
-      this.body.appendChild(ln);
+      ln.append(a, b); this.body.appendChild(ln);
       this.body.scrollTop = this.body.scrollHeight;
       this.lines.push('[' + ts + '] ' + msg);
     },
@@ -70,7 +67,7 @@
       return u.href;
     } catch { return ''; }
   }
-  const hostOf = (u) => { try { return new URL(u).host; } catch { return u; } };
+  const hostOf = (u) => { try { return new URL(u).host; } catch { return String(u).slice(0, 40); } };
   const safeHttp = (u) => { try { return /^https?:$/.test(new URL(u).protocol); } catch { return false; } };
   const short = (u, n = 64) => (u.length > n ? u.slice(0, n - 1) + '…' : u);
 
@@ -95,7 +92,6 @@
 
   function interpret(resp, src) {
     const { ok, status, data, text } = resp;
-    // Respons bukan JSON
     if (data == null) {
       const t = String(text || '').trim();
       if (ok && /^https?:\/\/\S+$/i.test(t)) return { ok: true, primary: t, others: [], raw: t };
@@ -107,13 +103,9 @@
     const found = [];
     walk(data, '', found, 0);
     const seen = new Set();
-    const urls = found.filter((x) => (seen.has(x.url) ? false : (seen.add(x.url), true)))
-      .sort((a, b) => rank(a.path) - rank(b.path));
+    const urls = found.filter((x) => (seen.has(x.url) ? false : (seen.add(x.url), true))).sort((a, b) => rank(a.path) - rank(b.path));
     const fresh = urls.filter((x) => x.url !== src);
-    if (!failed && fresh.length) {
-      return { ok: true, primary: fresh[0].url, others: fresh.slice(1).map((x) => x.url), raw: data };
-    }
-    // Hasil berupa teks biasa (bukan URL)
+    if (!failed && fresh.length) return { ok: true, primary: fresh[0].url, others: fresh.slice(1).map((x) => x.url), raw: data };
     if (!failed) {
       const r = flag.result ?? flag.data ?? flag.message;
       if (typeof r === 'string' && r.trim()) return { ok: true, text: r.trim(), others: [], raw: data };
@@ -138,13 +130,17 @@
       try {
         r = await fetch(API_LOCAL + '?url=' + encodeURIComponent(url), { signal: ctrl.signal, headers: { Accept: 'application/json' } });
       } catch (e) { if (e.name === 'AbortError') throw e; r = null; }
-      // Proxy server menandai balasannya; kalau tidak ada tanda, berarti hosting statis -> langsung ke API
+      // Proxy server menandai balasannya. Tanpa tanda (server lama / hosting statis) -> langsung ke API.
       if (r && r.headers.get('x-bypass-proxy')) return await readResp(r);
       term.log('warn', 'Proxy server tidak tersedia, mencoba langsung ke API...');
       r = await fetch(API_UPSTREAM + '?url=' + encodeURIComponent(url), { signal: ctrl.signal });
       return await readResp(r);
     } finally { clearTimeout(to); }
   }
+
+  /* ---------- Penghitung ---------- */
+  function renderCount() { const n = Number(store.get(CKEY, 0)) || 0; $('#bp-count').textContent = n.toLocaleString('id-ID'); }
+  function bumpCount() { store.set(CKEY, (Number(store.get(CKEY, 0)) || 0) + 1); renderCount(); }
 
   /* ---------- Riwayat ---------- */
   function loadHist() { const h = store.get(HKEY, []); return Array.isArray(h) ? h.filter((x) => x && x.src && x.out).slice(0, HMAX) : []; }
@@ -170,23 +166,23 @@
     return el;
   }
   function renderHist() {
-    const ul = $('#hist'); const h = loadHist();
+    const ul = $('#bp-hist'); const h = loadHist();
     ul.textContent = '';
-    $('#hist-clear').classList.toggle('hidden', !h.length);
+    $('#bp-hist-clear').classList.toggle('hidden', !h.length);
     if (!h.length) {
-      const li = document.createElement('li');
-      li.className = 'by-empty'; li.textContent = 'Belum ada riwayat. Hasil bypass terakhirmu tersimpan di perangkat ini.';
+      const li = document.createElement('li'); li.className = 'bp-empty';
+      li.textContent = 'Belum ada riwayat. Hasil bypass terakhirmu tersimpan di perangkat ini.';
       ul.appendChild(li); return;
     }
     h.forEach((x, i) => {
-      const li = document.createElement('li'); li.className = 'by-hi'; li.style.animationDelay = (i * 40) + 'ms';
-      const tx = document.createElement('div'); tx.className = 'by-hi-tx';
+      const li = document.createElement('li'); li.className = 'bp-hi'; li.style.animationDelay = (i * 40) + 'ms';
+      const tx = document.createElement('div'); tx.className = 'bp-hi-tx';
       const b = document.createElement('b'); b.textContent = short(x.out, 58);
       const sm = document.createElement('small'); sm.textContent = hostOf(x.src) + ' • ' + fmtAgo(x.t);
       tx.append(b, sm);
-      const acts = document.createElement('div'); acts.className = 'by-hi-acts';
+      const acts = document.createElement('div'); acts.className = 'bp-hi-acts';
       const cp = iconBtn('button', 'copy', 'Salin hasil');
-      cp.addEventListener('click', async () => toast((await copyText(x.out)) ? 'Link disalin' : 'Gagal menyalin'));
+      cp.addEventListener('click', async () => say((await copyText(x.out)) ? 'Link disalin' : 'Gagal menyalin'));
       acts.appendChild(cp);
       if (safeHttp(x.out)) {
         const op = iconBtn('a', 'ext', 'Buka link');
@@ -200,45 +196,58 @@
     });
   }
 
+  /* ---------- Pipeline progres (Kirim -> Proses -> Selesai) ---------- */
+  const nodes = [$('#bp-n1'), $('#bp-n2'), $('#bp-n3')];
+  const lines = [$('#bp-l1'), $('#bp-l2')];
+  function pipe(state) {
+    nodes.forEach((n) => n.classList.remove('on', 'done', 'fail'));
+    lines.forEach((l) => l.classList.remove('run', 'fill'));
+    if (state === 'idle') return;
+    if (state === 'send') { nodes[0].classList.add('on'); lines[0].classList.add('run'); }
+    if (state === 'proc') { nodes[0].classList.add('done'); lines[0].classList.add('fill'); nodes[1].classList.add('on'); lines[1].classList.add('run'); }
+    if (state === 'done') { nodes.forEach((n) => n.classList.add('done')); lines.forEach((l) => l.classList.add('fill')); }
+    if (state === 'fail') { nodes[0].classList.add('done'); lines[0].classList.add('fill'); nodes[1].classList.add('done'); lines[1].classList.add('fill'); nodes[2].classList.add('fail'); }
+  }
+
   /* ---------- Tampilan hasil ---------- */
-  const resEl = $('#res');
+  const resEl = $('#bp-res');
   function showResult(r, src) {
     resEl.classList.remove('hidden', 'fail');
-    $('#res-others').classList.add('hidden');
-    $('#res-others-list').textContent = '';
-    const main = $('#res-url'), open = $('#res-open'), copy = $('#res-copy');
-    const raw = $('#res-raw');
+    resEl.style.animation = 'none'; void resEl.offsetWidth; resEl.style.animation = '';
+    const others = $('#bp-others'); others.classList.add('hidden'); $('#bp-others-list').textContent = '';
+    const main = $('#bp-url'), open = $('#bp-open'), copy = $('#bp-copy'), share = $('#bp-share');
     const rawTxt = typeof r.raw === 'string' ? r.raw : JSON.stringify(r.raw, null, 2);
-    raw.textContent = String(rawTxt || '').slice(0, 6000);
-    $('#res-raw-wrap').classList.toggle('hidden', !rawTxt);
+    $('#bp-raw').textContent = String(rawTxt || '').slice(0, 6000);
+    $('#bp-raw-wrap').classList.toggle('hidden', !rawTxt);
+    $('#bp-from').textContent = hostOf(src);
+    const to = $('#bp-to');
 
     if (!r.ok) {
       resEl.classList.add('fail');
-      $('#res-stamp-t').textContent = 'GAGAL';
-      $('#res-meta').textContent = hostOf(src);
-      main.className = 'by-msg'; main.textContent = r.message;
-      open.classList.add('hidden'); copy.classList.add('hidden');
+      $('#bp-stamp-t').textContent = 'GAGAL';
+      to.textContent = '???';
+      main.className = 'bp-msg'; main.textContent = r.message;
+      open.classList.add('hidden'); copy.classList.add('hidden'); share.classList.add('hidden');
       return;
     }
-    $('#res-stamp-t').textContent = 'BERHASIL';
-    main.className = 'by-url';
+    $('#bp-stamp-t').textContent = 'SUKSES';
+    main.className = 'bp-url';
     copy.classList.remove('hidden');
-    if (r.text) {
-      main.textContent = r.text; open.classList.add('hidden');
-      $('#res-meta').textContent = hostOf(src) + ' → hasil teks';
-      copy.dataset.v = r.text; return;
-    }
-    main.textContent = r.primary; copy.dataset.v = r.primary;
-    $('#res-meta').textContent = hostOf(src) + ' → ' + hostOf(r.primary);
+    const val = r.text || r.primary;
+    copy.dataset.v = val;
+    share.dataset.v = val;
+    share.classList.toggle('hidden', !navigator.share);
+    if (r.text) { main.textContent = r.text; to.textContent = 'teks'; open.classList.add('hidden'); return; }
+    main.textContent = r.primary; to.textContent = hostOf(r.primary);
     if (safeHttp(r.primary)) { open.href = r.primary; open.classList.remove('hidden'); } else open.classList.add('hidden');
     if (r.others && r.others.length) {
-      $('#res-others').classList.remove('hidden');
-      const box = $('#res-others-list');
+      others.classList.remove('hidden');
+      const box = $('#bp-others-list');
       r.others.slice(0, 6).forEach((u) => {
-        const row = document.createElement('div'); row.className = 'by-other';
+        const row = document.createElement('div'); row.className = 'bp-other';
         const code = document.createElement('code'); code.textContent = u; row.appendChild(code);
         const cp = iconBtn('button', 'copy', 'Salin');
-        cp.addEventListener('click', async () => toast((await copyText(u)) ? 'Link disalin' : 'Gagal menyalin'));
+        cp.addEventListener('click', async () => say((await copyText(u)) ? 'Link disalin' : 'Gagal menyalin'));
         row.appendChild(cp);
         if (safeHttp(u)) { const a = iconBtn('a', 'ext', 'Buka'); a.href = u; a.target = '_blank'; a.rel = 'noopener noreferrer nofollow'; row.appendChild(a); }
         box.appendChild(row);
@@ -247,52 +256,58 @@
   }
 
   /* ---------- Aksi utama ---------- */
-  const input = $('#by-input'), field = $('#by-field'), go = $('#by-go');
+  const input = $('#bp-input'), field = $('#bp-field'), go = $('#bp-go');
   let busy = false, last = 0;
 
-  function syncField() { field.classList.toggle('has-val', !!input.value); field.classList.remove('bad'); }
+  function syncField() { field.classList.toggle('has-val', !!input.value); field.classList.remove('bp-bad'); }
 
   async function run() {
     if (busy) return;
     const src = normalizeUrl(input.value);
     if (!src) {
-      field.classList.remove('bad'); void field.offsetWidth; field.classList.add('bad');
+      field.classList.remove('bp-bad'); void field.offsetWidth; field.classList.add('bp-bad');
       term.log('err', 'Link tidak valid. Contoh: https://sfl.gl/q3lfk94');
-      toast('Masukkan link yang valid (http/https)', 'err');
+      say('Masukkan link yang valid (http/https)', 'err');
       input.focus(); return;
     }
-    if (Date.now() - last < 1500) return toast('Tunggu sebentar...', 'err');
+    if (Date.now() - last < 1500) return say('Tunggu sebentar...', 'err');
     last = Date.now(); busy = true;
     input.value = src; syncField();
     go.disabled = true; go.classList.add('loading');
-    $('#by-go-t').textContent = 'Memproses...';
+    $('#bp-go-t').textContent = 'Memproses...';
     resEl.classList.add('hidden');
+    pipe('send');
     term.log('sys', '$ bypass --url ' + hostOf(src));
     term.log('info', 'Menghubungi API bypass...');
+    const t2 = setTimeout(() => pipe('proc'), 700);
     try {
       const resp = await callApi(src);
+      clearTimeout(t2);
       term.log('info', 'Respons diterima (HTTP ' + resp.status + ').');
       const r = interpret(resp, src);
       showResult(r, src);
       if (r.ok) {
+        pipe('done');
         const out = r.primary || r.text;
         term.log('ok', 'Berhasil: ' + short(out, 90));
         if (r.primary) addHist(src, r.primary);
-        toast('Bypass berhasil!');
+        bumpCount(); party(); say('Bypass berhasil!');
         if (r.primary && !safeHttp(r.primary)) term.log('warn', 'Hasil bukan link http/https, tombol Buka disembunyikan.');
       } else {
+        pipe('fail');
         term.log('err', 'Gagal: ' + r.message);
-        toast('Bypass gagal', 'err');
+        say('Bypass gagal', 'err');
       }
       setTimeout(() => resEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 120);
     } catch (e) {
+      clearTimeout(t2);
       const msg = e && e.name === 'AbortError' ? 'Waktu habis (50 detik). Coba lagi nanti.' : 'Tidak bisa menghubungi API: ' + (e && e.message ? e.message : 'kesalahan jaringan');
-      term.log('err', msg);
+      term.log('err', msg); pipe('fail');
       showResult({ ok: false, message: msg, raw: '' }, src);
-      toast('Bypass gagal', 'err');
+      say('Bypass gagal', 'err');
     } finally {
       busy = false; go.disabled = false; go.classList.remove('loading');
-      $('#by-go-t').textContent = 'Bypass Sekarang';
+      $('#bp-go-t').textContent = 'Bypass Sekarang';
     }
   }
 
@@ -300,38 +315,29 @@
   go.addEventListener('click', run);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); run(); } });
   input.addEventListener('input', syncField);
-  $('#by-clear').addEventListener('click', () => { input.value = ''; syncField(); input.focus(); });
-  $('#by-paste').addEventListener('click', async () => {
+  $('#bp-x').addEventListener('click', () => { input.value = ''; syncField(); pipe('idle'); input.focus(); });
+  $('#bp-paste').addEventListener('click', async () => {
     try {
       const t = (await navigator.clipboard.readText()).trim();
-      if (!t) return toast('Clipboard kosong', 'err');
-      input.value = t; syncField(); toast('Link ditempel'); term.log('info', 'Link ditempel dari clipboard.');
-    } catch { toast('Izin clipboard ditolak. Tempel manual (Ctrl+V).', 'err'); input.focus(); }
+      if (!t) return say('Clipboard kosong', 'err');
+      input.value = t; syncField(); say('Link ditempel'); term.log('info', 'Link ditempel dari clipboard.');
+    } catch { say('Izin clipboard ditolak. Tempel manual (Ctrl+V).', 'err'); input.focus(); }
   });
-  document.querySelectorAll('[data-ex]').forEach((b) => b.addEventListener('click', () => {
-    input.value = b.dataset.ex; syncField(); input.focus();
-  }));
-  $('#res-copy').addEventListener('click', async (e) => {
+  root.querySelectorAll('[data-ex]').forEach((b) => b.addEventListener('click', () => { input.value = b.dataset.ex; syncField(); input.focus(); }));
+  $('#bp-copy').addEventListener('click', async (e) => say((await copyText(e.currentTarget.dataset.v || '')) ? 'Link disalin' : 'Gagal menyalin'));
+  $('#bp-share').addEventListener('click', async (e) => {
     const v = e.currentTarget.dataset.v || '';
-    toast((await copyText(v)) ? 'Link disalin' : 'Gagal menyalin', '');
+    try { await navigator.share({ title: 'Hasil Bypass', url: safeHttp(v) ? v : undefined, text: safeHttp(v) ? undefined : v }); } catch {}
   });
-  $('#term-copy').addEventListener('click', async () => toast((await copyText(term.text())) ? 'Log disalin' : 'Gagal menyalin'));
-  $('#term-clear').addEventListener('click', () => { term.clear(); term.log('sys', 'Log dibersihkan.'); });
-  $('#term-toggle').addEventListener('click', () => $('#term').classList.toggle('collapsed'));
-  $('#hist-clear').addEventListener('click', () => { store.set(HKEY, []); renderHist(); toast('Riwayat dihapus'); });
+  $('#bp-term-copy').addEventListener('click', async () => say((await copyText(term.text())) ? 'Log disalin' : 'Gagal menyalin'));
+  $('#bp-term-clear').addEventListener('click', () => { term.clear(); term.log('sys', 'Log dibersihkan.'); });
+  $('#bp-term-toggle').addEventListener('click', () => $('#bp-term').classList.toggle('collapsed'));
+  $('#bp-hist-clear').addEventListener('click', () => { store.set(HKEY, []); renderHist(); say('Riwayat dihapus'); });
 
   /* ---------- Awal ---------- */
-  try {
-    const nm = JSON.parse(localStorage.getItem('am_user') || 'null');
-    if (nm && typeof nm === 'string') {
-      const h = $('#by-hello');
-      h.querySelector('span').textContent = 'Halo, ' + nm.slice(0, 24) + '!';
-      h.classList.remove('hidden');
-    }
-  } catch {}
   const pre = new URLSearchParams(location.search).get('url');
   if (pre) { input.value = pre.slice(0, 2000); syncField(); }
-  renderHist();
+  renderHist(); renderCount(); pipe('idle');
   term.log('sys', 'bypass_terminal siap.');
   term.log('tip', 'Tempel link lalu tekan "Bypass Sekarang".');
 })();
