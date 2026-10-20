@@ -9,6 +9,7 @@
   const $ = (s) => root.querySelector(s);
   const API_LOCAL = '/api/bypass';
   const API_UPSTREAM = 'https://apiii-xrina.my.id/tools/bypassv2';
+const PROVIDER_PAGE = API_UPSTREAM; // halaman provider (bisa dibuka manual)
   const HKEY = 'am_bypass_hist';
   const CKEY = 'am_bypass_count';
   const HMAX = 10;
@@ -95,7 +96,9 @@
     if (data == null) {
       const t = String(text || '').trim();
       if (ok && /^https?:\/\/\S+$/i.test(t)) return { ok: true, primary: t, others: [], raw: t };
-      return { ok: false, message: ok ? 'Respons API tidak dikenali.' : 'API membalas HTTP ' + status + '.', raw: t.slice(0, 1500) };
+      const html = /^\s*</.test(t);
+      const block = !ok && (status === 403 || status === 429 || status === 503) && html;
+      return { ok: false, message: ok ? 'Respons API tidak dikenali.' : (block ? 'API provider menolak permintaan (HTTP ' + status + ', kemungkinan perlindungan anti-bot). Coba buka lewat situs provider.' : 'API membalas HTTP ' + status + '.'), raw: t.slice(0, 1500) };
     }
     const flag = data && typeof data === 'object' ? data : {};
     const failed = !ok || flag.status === false || flag.success === false || flag.ok === false ||
@@ -131,7 +134,20 @@
         r = await fetch(API_LOCAL + '?url=' + encodeURIComponent(url), { signal: ctrl.signal, headers: { Accept: 'application/json' } });
       } catch (e) { if (e.name === 'AbortError') throw e; r = null; }
       // Proxy server menandai balasannya. Tanpa tanda (server lama / hosting statis) -> langsung ke API.
-      if (r && r.headers.get('x-bypass-proxy')) return await readResp(r);
+      if (r && r.headers.get('x-bypass-proxy')) {
+        const pr = await readResp(r);
+        if (pr.ok || pr.data != null) return pr; // JSON jelas: hasil atau pesan dari API
+        term.log('warn', 'Server diblokir API provider (HTTP ' + pr.status + '), mencoba langsung dari browser...');
+        try {
+          const dr = await readResp(await fetch(API_UPSTREAM + '?url=' + encodeURIComponent(url), { signal: ctrl.signal }));
+          if (dr.ok || dr.data != null) return dr;
+          return dr.status ? dr : pr;
+        } catch (e) {
+          if (e.name === 'AbortError') throw e;
+          term.log('warn', 'Browser juga tidak bisa mengakses API langsung (CORS / diblokir).');
+          return pr;
+        }
+      }
       term.log('warn', 'Proxy server tidak tersedia, mencoba langsung ke API...');
       r = await fetch(API_UPSTREAM + '?url=' + encodeURIComponent(url), { signal: ctrl.signal });
       return await readResp(r);
@@ -221,6 +237,9 @@
     $('#bp-raw-wrap').classList.toggle('hidden', !rawTxt);
     $('#bp-from').textContent = hostOf(src);
     const to = $('#bp-to');
+    const prov = $('#bp-prov');
+    prov.href = PROVIDER_PAGE + '?url=' + encodeURIComponent(src);
+    prov.classList.toggle('hidden', !!r.ok);
 
     if (!r.ok) {
       resEl.classList.add('fail');
