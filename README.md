@@ -49,15 +49,3 @@ v4.5 - Balasan ulasan, like, room publik, kontrol admin per pengguna, perbaikan 
 
 ## v4.7
 - Popup donasi muncul setiap masuk dan muncul lagi tiap 4 menit setelah ditutup (atur di app.js: donatePop.EVERY).
-
-## v4.8
-- Halaman baru **Bypass Link** di `/bypass` (file `public/bypass.html`, `bypass.css`, `bypass.js`), tampilan neo brutalism sama dengan AM Premify. Tempel link shortener, tekan Bypass Sekarang, dapatkan link tujuan. Ada terminal log, tombol Buka/Salin, dan riwayat 10 terakhir (disimpan di browser, bukan di server).
-- Server: `GET /api/bypass?url=...` meneruskan ke `https://apiii-xrina.my.id/tools/bypassv2` (batas 20 permintaan / 5 menit per IP, hanya link http/https). Ganti API lewat `BYPASS_UPSTREAM`, atur batas lewat `BYPASS_LIMIT` di `.env`.
-- Jika hosting statis (tanpa `server.js`), halaman otomatis memanggil API langsung dari browser. Itu butuh API mengizinkan CORS.
-- Akses: tab Bypass di topbar, menu (HP), Ctrl+K "Bypass Link", atau langsung ketik `/bypass` di akhir domain. Prefill: `/bypass?url=https://sfl.gl/q3lfk94`.
-
-## v4.9
-- Bypass sekarang menu di dalam AM Premify (bukan halaman terpisah): tab **Bypass** di topbar, item di menu HP, ikon di dock bawah (menggantikan Panduan, yang tetap ada di tab desktop, tombol beranda, dan Ctrl+K), serta tombol "Bypass Link" di beranda.
-- URL: `/bypass` (server v4.9+). Di server lama atau hosting statis, otomatis memakai `/index#bypass`.
-- Cek versi server: buka `/api/version` (harus `"version":"4.9.0","bypass":true`).
-- `public/bypass.html` dihapus; semua ada di `index.html` + `bypass.css` + `bypass.js`.
