@@ -14,7 +14,6 @@
   <link rel="stylesheet" href="/chat.css">
   <link rel="stylesheet" href="/community.css">
   <link rel="stylesheet" href="/responsive.css">
-  <link rel="stylesheet" href="/bypass.css">
   <script>
     (function(){try{
       var a=JSON.parse(localStorage.getItem('am_accent')||'null'); if(a) document.documentElement.setAttribute('data-accent',a);
@@ -154,7 +153,6 @@
       <a class="tab active" href="/index" data-tab="home" role="tab"><svg class="ic"><use href="#i-grid"/></svg><span>Dashboard</span></a>
       <a class="tab" href="/premium" data-tab="premium" role="tab"><svg class="ic"><use href="#i-shield"/></svg><span>Premiumkan</span></a>
       <a class="tab" href="/panduan" data-tab="guide" role="tab"><svg class="ic"><use href="#i-book"/></svg><span>Panduan</span></a>
-      <a class="tab" href="/bypass" data-tab="bypass" role="tab"><svg class="ic"><use href="#i-link"/></svg><span>Bypass</span></a>
       <a class="tab" href="/rating" data-tab="reviews" role="tab"><svg class="ic"><use href="#i-star"/></svg><span>Rating</span></a>
       <a class="tab" href="/room" data-tab="room" role="tab"><svg class="ic"><use href="#i-users"/></svg><span>Room</span></a>
     </nav>
@@ -195,7 +193,6 @@
       <div class="hero-actions">
         <button class="btn btn-sand" data-goto="premium"><svg class="ic"><use href="#i-shield"/></svg><span>Premiumkan Akun</span></button>
         <button class="btn btn-ghost" data-goto="guide"><svg class="ic"><use href="#i-book"/></svg><span>Panduan</span></button>
-        <button class="btn btn-ghost" data-goto="bypass"><svg class="ic"><use href="#i-link"/></svg><span>Bypass Link</span></button>
       </div>
     </div>
 
@@ -431,98 +428,6 @@
     <button class="btn btn-dark" data-goto="premium"><svg class="ic"><use href="#i-shield"/></svg><span>Mulai Premiumkan Akun</span></button>
   </section>
 
-  <!-- BYPASS LINK -->
-  <section class="view hidden" data-view="bypass" id="bp-view">
-
-    <div class="card bp-hero">
-      <svg class="ic bp-bolt" aria-hidden="true"><use href="#i-bolt"/></svg>
-      <span class="bp-ring" aria-hidden="true"></span>
-      <span class="bp-kicker"><i></i>BYPASS LINK</span>
-      <h2><span class="w1">BY</span><span class="w2">PASS</span></h2>
-      <p>Tempel link shortener, tekan satu tombol, dan langsung dapat link tujuannya. Tanpa iklan berlapis, tanpa ribet.</p>
-      <div class="bp-chips">
-        <span class="chip"><svg class="ic"><use href="#i-bolt"/></svg>CEPAT</span>
-        <span class="chip gold"><svg class="ic"><use href="#i-sparkle"/></svg>GRATIS</span>
-        <span class="chip"><svg class="ic"><use href="#i-check"/></svg><b id="bp-count">0</b>&nbsp;DIBYPASS</span>
-      </div>
-    </div>
-
-    <div class="card bp-card">
-      <span class="bp-tape">LANGKAH 1</span>
-      <div class="bp-row">
-        <div class="field" id="bp-field">
-          <svg class="ic"><use href="#i-link"/></svg>
-          <input class="input" id="bp-input" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Tempel link di sini, misal https://sfl.gl/q3lfk94" aria-label="Link yang akan di-bypass">
-          <button class="bp-x" id="bp-x" type="button" aria-label="Hapus isi"><svg class="ic sm"><use href="#i-x"/></svg></button>
-        </div>
-        <button class="bp-ibtn" id="bp-paste" type="button" aria-label="Tempel dari clipboard"><svg class="ic"><use href="#i-paste"/></svg><span class="bp-ibtn-t">Tempel</span></button>
-      </div>
-      <div class="bp-ex-row">Contoh: <button class="bp-ex" type="button" data-ex="https://sfl.gl/q3lfk94"><svg class="ic sm"><use href="#i-link"/></svg>sfl.gl/q3lfk94</button></div>
-
-      <button class="btn bp-go" id="bp-go" type="button"><svg class="ic"><use href="#i-bolt"/></svg><span id="bp-go-t">Bypass Sekarang</span></button>
-
-      <div class="bp-pipe" aria-hidden="true">
-        <div class="bp-node" id="bp-n1"><i><b>1</b><svg class="ic ok"><use href="#i-check"/></svg><svg class="ic no"><use href="#i-x"/></svg></i>Kirim</div>
-        <div class="bp-line" id="bp-l1"><b></b></div>
-        <div class="bp-node" id="bp-n2"><i><b>2</b><svg class="ic ok"><use href="#i-check"/></svg><svg class="ic no"><use href="#i-x"/></svg></i>Proses</div>
-        <div class="bp-line" id="bp-l2"><b></b></div>
-        <div class="bp-node" id="bp-n3"><i><b>3</b><svg class="ic ok"><use href="#i-check"/></svg><svg class="ic no"><use href="#i-x"/></svg></i>Selesai</div>
-      </div>
-
-      <div class="bp-warn"><svg class="ic sm"><use href="#i-alert"/></svg><span>Selalu periksa alamat link tujuan sebelum membuka. Jangan memasukkan kata sandi atau data pribadi di situs yang tidak kamu kenal.</span></div>
-    </div>
-
-    <div class="card bp-res hidden" id="bp-res" aria-live="polite">
-      <span class="bp-stamp"><svg class="ic sm"><use href="#i-ok"/></svg><span id="bp-stamp-t">SUKSES</span></span>
-      <div class="bp-flow"><span class="bp-host" id="bp-from"></span><svg class="ic sm"><use href="#i-arrow"/></svg><span class="bp-host to" id="bp-to"></span></div>
-      <span class="bp-url" id="bp-url"></span>
-      <div class="bp-acts">
-        <a class="btn btn-dark" id="bp-open" href="#" target="_blank" rel="noopener noreferrer nofollow"><svg class="ic"><use href="#i-ext"/></svg><span>Buka Link</span></a>
-        <button class="btn btn-sand" id="bp-copy" type="button"><svg class="ic"><use href="#i-copy"/></svg><span>Salin</span></button>
-        <a class="btn btn-sand hidden" id="bp-prov" href="#" target="_blank" rel="noopener noreferrer nofollow"><svg class="ic"><use href="#i-ext"/></svg><span>Buka di situs provider</span></a>
-        <button class="btn btn-ghost hidden" id="bp-share" type="button"><svg class="ic"><use href="#i-share"/></svg><span>Bagikan</span></button>
-      </div>
-      <div class="bp-others hidden" id="bp-others"><h4>Link lain dari API</h4><div class="bp-others" id="bp-others-list"></div></div>
-      <div id="bp-raw-wrap"><details class="bp-raw"><summary><svg class="ic sm"><use href="#i-code"/></svg>Lihat respons mentah</summary><pre id="bp-raw"></pre></details></div>
-    </div>
-
-    <div class="term" id="bp-term">
-      <div class="term-bar">
-        <div class="dots"><i></i><i></i><i></i></div>
-        <div class="term-title"><svg class="ic sm"><use href="#i-terminal"/></svg>bypass_terminal.log</div>
-        <div class="term-actions">
-          <button class="tbtn" id="bp-term-copy" type="button" title="Salin log"><svg class="ic sm"><use href="#i-copy"/></svg><span>Salin</span></button>
-          <button class="tbtn icon" id="bp-term-clear" type="button" title="Bersihkan log"><svg class="ic sm"><use href="#i-trash"/></svg></button>
-          <button class="tbtn icon" id="bp-term-toggle" type="button" title="Ciutkan"><svg class="ic sm"><use href="#i-chev"/></svg></button>
-        </div>
-      </div>
-      <div class="term-body" id="bp-term-body" role="log" aria-live="polite"></div>
-    </div>
-
-    <div class="card">
-      <div class="bp-hist-head">
-        <h3 class="card-title"><svg class="ic"><use href="#i-clock"/></svg>Riwayat</h3>
-        <button class="tbtn hidden" id="bp-hist-clear" type="button"><svg class="ic sm"><use href="#i-trash"/></svg><span>Hapus semua</span></button>
-      </div>
-      <ul class="bp-hist" id="bp-hist"></ul>
-    </div>
-
-    <div class="card">
-      <h3 class="card-title"><svg class="ic"><use href="#i-book"/></svg>Cara pakai</h3>
-      <div class="bp-steps">
-        <div class="bp-step"><span class="g-num">1</span><h3>Salin link</h3><p>Salin link shortener yang mau dibuka, misalnya dari chat atau deskripsi video.</p></div>
-        <div class="bp-step"><span class="g-num">2</span><h3>Tempel &amp; Bypass</h3><p>Tempel di kolom di atas, lalu tekan Bypass Sekarang dan tunggu prosesnya.</p></div>
-        <div class="bp-step"><span class="g-num">3</span><h3>Buka hasilnya</h3><p>Periksa alamat tujuan, lalu buka atau salin link hasilnya.</p></div>
-      </div>
-      <div class="bp-faq">
-        <details><summary>Kenapa bypass gagal?<svg class="ic sm"><use href="#i-down"/></svg></summary><p>Link mungkin sudah kedaluwarsa, salah ketik, atau jenisnya belum didukung layanan bypass. Cek link di browser, lalu coba lagi beberapa saat kemudian.</p></details>
-        <details><summary>Apakah riwayatku tersimpan di server?<svg class="ic sm"><use href="#i-down"/></svg></summary><p>Tidak. Riwayat hanya disimpan di browser perangkatmu (maksimal 10) dan bisa dihapus kapan saja lewat tombol Hapus semua.</p></details>
-        <details><summary>Apakah link hasil pasti aman?<svg class="ic sm"><use href="#i-down"/></svg></summary><p>Tidak ada jaminan. Hasil berasal dari situs lain, jadi selalu periksa alamatnya dulu dan hindari mengunduh file yang mencurigakan.</p></details>
-      </div>
-    </div>
-
-  </section>
-
   <!-- RATING, ULASAN, BUKTI SUKSES -->
   <section class="view hidden" data-view="reviews" id="rv-view">
     <div class="card head-card rv-head">
@@ -648,7 +553,7 @@
 
 </main>
 
-<footer class="footer">AM Premify v4.9 &bull; Developer kenz</footer>
+<footer class="footer">AM Premify v4.2 &bull; Developer kenz</footer>
 <div id="warn-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="wm-title">
   <div class="modal-card">
     <div class="modal-stripe"></div>
@@ -794,11 +699,6 @@
       <span class="si-tx"><b>Dukung Developer</b><small>Kirim donasi via Sociabuzz</small></span>
       <svg class="ic si-go"><use href="#i-ext"/></svg>
     </a>
-    <a class="sheet-item" style="--i:1" href="/bypass" data-goto-link="bypass">
-      <span class="si-ic"><svg class="ic"><use href="#i-link"/></svg></span>
-      <span class="si-tx"><b>Bypass Link</b><small>Buka link shortener langsung ke tujuan</small></span>
-      <svg class="ic si-go"><use href="#i-arrow"/></svg>
-    </a>
     <a class="sheet-item gold" style="--i:1" href="/biodata" data-goto-link="bio">
       <span class="si-ic"><svg class="ic"><use href="#i-user"/></svg></span>
       <span class="si-tx"><b>Biodata Developer</b><small>Kenali siapa yang membangun ini</small></span>
@@ -841,7 +741,7 @@
 <nav class="dock" id="dock" aria-label="Navigasi utama">
   <a class="dock-i active" href="/index" data-tab="home"><span class="dock-ic"><svg class="ic"><use href="#i-grid"/></svg></span><span class="dock-t">Beranda</span></a>
   <a class="dock-i dock-main" href="/premium" data-tab="premium"><span class="dock-ic"><svg class="ic"><use href="#i-crown"/></svg></span><span class="dock-t">Premium</span></a>
-  <a class="dock-i" href="/bypass" data-tab="bypass"><span class="dock-ic"><svg class="ic"><use href="#i-link"/></svg></span><span class="dock-t">Bypass</span></a>
+  <a class="dock-i" href="/panduan" data-tab="guide"><span class="dock-ic"><svg class="ic"><use href="#i-book"/></svg></span><span class="dock-t">Panduan</span></a>
   <a class="dock-i" href="/rating" data-tab="reviews"><span class="dock-ic"><svg class="ic"><use href="#i-star"/></svg></span><span class="dock-t">Rating</span></a>
   <a class="dock-i" href="/room" data-tab="room"><span class="dock-ic"><svg class="ic"><use href="#i-users"/></svg></span><span class="dock-t">Room</span></a>
   <button class="dock-i" id="dock-menu" type="button" aria-haspopup="dialog"><span class="dock-ic"><svg class="ic"><use href="#i-menu"/></svg></span><span class="dock-t">Menu</span></button>
@@ -894,7 +794,6 @@
 <script src="/ui.js"></script>
 <script src="/device.js"></script>
 <script src="/app.js"></script>
-<script src="/bypass.js"></script>
 <script src="/reviews.js"></script>
 <script src="/chat.js"></script>
 <script src="/social.js"></script>
