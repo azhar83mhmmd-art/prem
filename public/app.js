@@ -23,32 +23,28 @@ function toast(msg, type = '') {
 }
 
 /* Navigasi (URL bersih tanpa .html: /index, /premium, /panduan) */
-const ROUTES = { home: '/index', premium: '/premium', guide: '/panduan', reviews: '/rating', room: '/room', bio: '/biodata', bypass: '/index#bypass' };
-const TITLES = { home: 'Dashboard', premium: 'Premiumkan Akun', guide: 'Panduan', reviews: 'Rating & Ulasan', room: 'Room Publik', bio: 'Biodata Developer', bypass: 'Bypass Link' };
-const VIEW_BY_PATH = { '/': 'home', '/index': 'home', '/premium': 'premium', '/panduan': 'guide', '/rating': 'reviews', '/ulasan': 'reviews', '/bukti': 'reviews', '/room': 'room', '/biodata': 'bio', '/bypass': 'bypass' };
-// /bypass (server baru) atau /index#bypass (server lama / hosting statis)
-const viewFromLocation = () => (location.hash === '#bypass' ? 'bypass' : (VIEW_BY_PATH[location.pathname] || 'home'));
+const ROUTES = { home: '/index', premium: '/premium', guide: '/panduan', reviews: '/rating', room: '/room', bio: '/biodata' };
+const TITLES = { home: 'Dashboard', premium: 'Premiumkan Akun', guide: 'Panduan', reviews: 'Rating & Ulasan', room: 'Room Publik', bio: 'Biodata Developer' };
+const VIEW_BY_PATH = { '/': 'home', '/index': 'home', '/premium': 'premium', '/panduan': 'guide', '/rating': 'reviews', '/ulasan': 'reviews', '/bukti': 'reviews', '/room': 'room', '/biodata': 'bio' };
 
 function show(view, push = true) {
   $$('.view').forEach((v) => v.classList.toggle('hidden', v.dataset.view !== view));
   $$('.tab, .dock-i[data-tab]').forEach((t) => t.classList.toggle('active', t.dataset.tab === view));
   document.body.classList.toggle('bio-mode', view === 'bio');
   document.title = `AM Premify - ${TITLES[view]}`;
-  if (push && location.pathname + location.hash !== ROUTES[view]) history.pushState({ view }, '', ROUTES[view]);
+  if (push && location.pathname !== ROUTES[view]) history.pushState({ view }, '', ROUTES[view]);
   window.scrollTo({ top: 0, behavior: 'smooth' });
   if (view === 'home') renderHome();
   window.dispatchEvent(new CustomEvent('am:view', { detail: { view } }));
 }
 $$('.tab, .dock-i[data-tab]').forEach((t) => t.addEventListener('click', (e) => {
-  if (!t.dataset.tab) return; // tab halaman lain (mis. /bypass): navigasi biasa
   if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return; // buka di tab baru tetap normal
   e.preventDefault();
   if (navigator.vibrate && t.classList.contains('dock-i')) navigator.vibrate(8);
   show(t.dataset.tab);
 }));
 $$('[data-goto]').forEach((b) => b.addEventListener('click', () => show(b.dataset.goto)));
-window.addEventListener('popstate', () => show(viewFromLocation(), false));
-window.addEventListener('hashchange', () => { if (viewFromLocation() !== document.querySelector('.view:not(.hidden)')?.dataset.view) show(viewFromLocation(), false); });
+window.addEventListener('popstate', () => show(VIEW_BY_PATH[location.pathname] || 'home', false));
 
 /* Menu (bottom sheet) + Biodata Developer */
 const menu = {
@@ -1143,7 +1139,6 @@ const cmd = {
       { g: 'NAVIGASI', t: 'Dashboard', d: 'Statistik & aktivitas real-time', i: 'grid', k: 'beranda home dashboard', run: go('home') },
       { g: 'NAVIGASI', t: 'Premiumkan Akun', d: 'Kirim magic link & aktifkan VIP', i: 'crown', k: 'premium vip aktivasi email', run: go('premium') },
       { g: 'NAVIGASI', t: 'Panduan', d: '3 langkah + pertanyaan umum', i: 'book', k: 'panduan bantuan faq cara', run: go('guide') },
-      { g: 'NAVIGASI', t: 'Bypass Link', d: 'Buka link shortener langsung ke tujuan', i: 'link', k: 'bypass link shortener sfl skip iklan tujuan', run: go('bypass') },
       { g: 'NAVIGASI', t: 'Biodata Developer', d: 'Kenali pembuat website ini', i: 'user', k: 'biodata developer kenz profil', run: go('bio') },
       { g: 'NAVIGASI', t: 'Rating & Ulasan', d: 'Rating keseluruhan dari pengguna', i: 'star', k: 'rating ulasan bintang review nilai', run: () => (window.Reviews ? Reviews.go('rating') : show('reviews')) },
       { g: 'NAVIGASI', t: 'Bukti Sukses', d: 'Screenshot akun premium dari pengguna', i: 'image', k: 'bukti sukses screenshot akun testimoni', run: () => (window.Reviews ? Reviews.go('bukti') : show('reviews')) },
@@ -1242,12 +1237,9 @@ trackVisit();
 applyUser();
 renderHome();
 renderMini();
-show(viewFromLocation(), false);
+show(VIEW_BY_PATH[location.pathname] || 'home', false);
 if (location.pathname === '/') history.replaceState(null, '', '/index');
 heroTyper();
-fetch('/api/version', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((j) => {
-  if (j && j.bypass) { ROUTES.bypass = '/bypass'; if (location.hash === '#bypass') history.replaceState({ view: 'bypass' }, '', '/bypass' + location.search); }
-}).catch(() => {});
 if (userName()) {
   document.documentElement.classList.remove('needs-name');
   showWarnIfNeeded();
