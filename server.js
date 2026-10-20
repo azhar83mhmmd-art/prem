@@ -47,14 +47,8 @@ const PUBLIC_DIR = fs.existsSync(path.join(__dirname, 'public'))
 const BLOCKED = ['server.js', 'package.json', 'package-lock.json', 'vercel.json', 'supabase.sql'];
 
 // URL bersih (tanpa .html) -> semuanya dilayani oleh index.html
-const PAGES = new Set(['/', '/index', '/premium', '/panduan', '/rating', '/ulasan', '/bukti', '/biodata', '/room', '/bypass']);
+const PAGES = new Set(['/', '/index', '/premium', '/panduan', '/rating', '/ulasan', '/bukti', '/biodata', '/room']);
 const ADMIN_PAGE = '/admin';
-// v4.9: menu Bypass Link (view di index, /bypass) + proxy API
-const APP_VERSION = '4.9.0';
-const BYPASS_PAGE = '/bypass';
-const BYPASS_UPSTREAM = process.env.BYPASS_UPSTREAM || 'https://apiii-xrina.my.id/tools/bypassv2';
-// Batas permintaan bypass per IP dalam 5 menit
-const BYPASS_LIMIT = Number(process.env.BYPASS_LIMIT || 20);
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -1215,54 +1209,6 @@ async function handleRoomDelete(req, res) {
   sendJson(res, 200, { ok: true });
 }
 
-/* ---------- v4.8: Bypass Link (proxy ke API bypass) ---------- */
-async function handleBypass(req, res, url) {
-  const H = { 'X-Bypass-Proxy': '1' };
-  const out = (status, obj) => {
-    res.writeHead(status, Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }, H));
-    res.end(JSON.stringify(obj));
-  };
-  if (!sameOrigin(req)) return out(403, { success: false, error: 'Permintaan ditolak.' });
-  const ip = clientIp(req);
-  if (rl('byp:' + ipKey(ip), BYPASS_LIMIT, 5 * 60000)) return out(429, { success: false, error: 'Terlalu banyak permintaan. Tunggu beberapa menit lalu coba lagi.' });
-
-  const target = String(url.searchParams.get('url') || '').trim();
-  let parsed;
-  try { parsed = new URL(target); } catch { parsed = null; }
-  if (!parsed || !/^https?:$/.test(parsed.protocol) || !parsed.hostname.includes('.') || target.length > 2000) {
-    return out(400, { success: false, error: 'Link tidak valid. Gunakan link http/https.' });
-  }
-  try {
-    const target2 = BYPASS_UPSTREAM + '?url=' + encodeURIComponent(parsed.href);
-    const origin = new URL(BYPASS_UPSTREAM).origin;
-    let extra = {};
-    try { extra = JSON.parse(process.env.BYPASS_HEADERS || '{}') || {}; } catch {}
-    // Profil 1: Chrome Android (mirip pemakaian dari HP). Profil 2: Chrome desktop. Dicoba berurutan jika diblokir.
-    const profiles = [
-      { 'User-Agent': process.env.BYPASS_UA || 'Mozilla/5.0 (Linux; Android 13; SM-A546E) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
-        Accept: 'application/json, text/plain, */*', 'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
-        Referer: origin + '/', Origin: origin, 'Sec-Fetch-Dest': 'empty', 'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Site': 'same-origin' },
-      { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        Accept: '*/*', 'Accept-Language': 'en-US,en;q=0.9', Referer: origin + '/tools/bypassv2' }
-    ];
-    let r = null, text = '';
-    for (const prof of profiles) {
-      r = await fetch(target2, { headers: Object.assign({}, prof, extra), redirect: 'follow', signal: AbortSignal.timeout(45000) });
-      text = (await r.text()).slice(0, 300000);
-      if (![403, 429, 503].includes(r.status)) break;
-    }
-    res.writeHead(r.status, Object.assign({
-      'Content-Type': r.headers.get('content-type') || 'application/json; charset=utf-8',
-      'Cache-Control': 'no-store',
-      'X-Content-Type-Options': 'nosniff'
-    }, H));
-    res.end(text);
-  } catch (err) {
-    const timeout = err && (err.name === 'TimeoutError' || err.name === 'AbortError');
-    out(timeout ? 504 : 502, { success: false, error: timeout ? 'API bypass terlalu lama merespons.' : 'API bypass tidak terjangkau.' });
-  }
-}
-
 /* ---------- File statis ---------- */
 function serveFile(res, rel, onMissing, extraHeaders) {
   const file = path.normalize(decodeURIComponent(rel)).replace(/^(\.\.[\/\\])+/, '');
@@ -1306,8 +1252,6 @@ const server = http.createServer(async (req, res) => {
     if (req.method !== 'GET') return sendJson(res, 404, { error: 'Not Found' });
 
     if (pathname === '/api/visitor') return handleVisitor(req, res);
-    if (pathname === '/api/bypass') return await handleBypass(req, res, url);
-    if (pathname === '/api/version') return sendJson(res, 200, { app: 'AM Premify', version: APP_VERSION, bypass: true });
     if (pathname === '/api/chat') return await handleChatGet(req, res, url);
     if (pathname === '/api/chat/unread') return await handleChatUnread(req, res);
     if (pathname === '/api/social/stats') return await handleSocialStats(req, res, url);
@@ -1334,7 +1278,7 @@ const server = http.createServer(async (req, res) => {
       return redirect(res, 301, (clean === '/index' || clean === '' ? '/index' : clean) + (search || ''));
     }
 
-    if (PAGES.has(pathname.replace(/(.)\/+$/, '$1'))) return serveFile(res, '/index.html');
+    if (PAGES.has(pathname)) return serveFile(res, '/index.html');
 
     // Aset statis; halaman tak dikenal (tanpa ekstensi) diarahkan ke /index
     return serveFile(res, pathname, () => {
@@ -1351,7 +1295,6 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`[AM Premify] Panel aktif di: http://localhost:${PORT}/index`);
   console.log(`[AM Premify] Upstream: ${UPSTREAM}`);
-  console.log(`[AM Premify] Bypass: http://localhost:${PORT}${BYPASS_PAGE}  (API: ${BYPASS_UPSTREAM})`);
   if (!process.env.TURNSTILE_SITE_KEY || !process.env.TURNSTILE_SECRET_KEY) {
     console.log('[AM Premify] Turnstile: pakai kunci UJI (selalu lolos). Isi TURNSTILE_SITE_KEY & TURNSTILE_SECRET_KEY di .env untuk produksi.');
   }
