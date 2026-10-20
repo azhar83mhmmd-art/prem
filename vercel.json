@@ -32,6 +32,10 @@
     {
       "source": "/admin",
       "destination": "/admin.html"
+    },
+    {
+      "source": "/bypass",
+      "destination": "/bypass.html"
     }
   ]
 }
