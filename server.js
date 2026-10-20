@@ -1233,11 +1233,24 @@ async function handleBypass(req, res, url) {
     return out(400, { success: false, error: 'Link tidak valid. Gunakan link http/https.' });
   }
   try {
-    const r = await fetch(BYPASS_UPSTREAM + '?url=' + encodeURIComponent(parsed.href), {
-      headers: { Accept: 'application/json', 'User-Agent': 'AM-Premify/4.8' },
-      signal: AbortSignal.timeout(45000)
-    });
-    const text = (await r.text()).slice(0, 300000);
+    const target2 = BYPASS_UPSTREAM + '?url=' + encodeURIComponent(parsed.href);
+    const origin = new URL(BYPASS_UPSTREAM).origin;
+    let extra = {};
+    try { extra = JSON.parse(process.env.BYPASS_HEADERS || '{}') || {}; } catch {}
+    // Profil 1: Chrome Android (mirip pemakaian dari HP). Profil 2: Chrome desktop. Dicoba berurutan jika diblokir.
+    const profiles = [
+      { 'User-Agent': process.env.BYPASS_UA || 'Mozilla/5.0 (Linux; Android 13; SM-A546E) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+        Accept: 'application/json, text/plain, */*', 'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+        Referer: origin + '/', Origin: origin, 'Sec-Fetch-Dest': 'empty', 'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Site': 'same-origin' },
+      { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        Accept: '*/*', 'Accept-Language': 'en-US,en;q=0.9', Referer: origin + '/tools/bypassv2' }
+    ];
+    let r = null, text = '';
+    for (const prof of profiles) {
+      r = await fetch(target2, { headers: Object.assign({}, prof, extra), redirect: 'follow', signal: AbortSignal.timeout(45000) });
+      text = (await r.text()).slice(0, 300000);
+      if (![403, 429, 503].includes(r.status)) break;
+    }
     res.writeHead(r.status, Object.assign({
       'Content-Type': r.headers.get('content-type') || 'application/json; charset=utf-8',
       'Cache-Control': 'no-store',
