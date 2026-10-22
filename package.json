@@ -1,10 +1,12 @@
 {
-  "name": "pt-gondam",
-  "version": "2.0.0",
-  "description": "PT GONDAM - Marketplace jual beli akun digital (Pure Supabase + Static Frontend + Vercel)",
-  "private": true,
+  "name": "am-premify",
+  "version": "4.7.0",
+  "description": "AM Premify - Premium Panel",
+  "main": "server.js",
   "scripts": {
-    "dev": "npx serve public",
-    "vercel-build": "echo 'Static site, tidak ada build step.'"
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
