@@ -60,3 +60,9 @@ v4.5 - Balasan ulasan, like, room publik, kontrol admin per pengguna, perbaikan 
 - PASANG IKLAN: buka `public/ads.html`, tempel kode dari jaringan iklan (Adsterra, Monetag, PropellerAds, dll.) menggantikan blok "SLOT IKLAN". Halaman ini tampil di iframe ber-sandbox. Atau isi AD_FRAME_URL dengan URL penuh halaman iklan di domain lain.
 - WAJIB: jalankan ulang supabase.sql (bagian v4.8), lalu restart server. Tanpa Supabase, saldo kunci hanya di memori (cukup untuk uji lokal).
 - Catatan jujur: tanpa postback server-ke-server dari jaringan iklan, sistem tidak bisa memastikan iklan benar-benar dilihat, hanya bahwa pengguna menunggu penuh durasi di halaman. Untuk bukti tayang yang kuat, pakai jaringan iklan "rewarded" yang punya callback server.
+
+## v4.8.2 - Gerbang pemblokir iklan
+- Pengguna yang memakai DNS pemblokir iklan (AdGuard DNS, NextDNS, Private DNS pemblokir, Blokada) atau ekstensi AdBlock/uBlock tidak bisa memakai website: muncul popup yang tidak bisa ditutup berisi cara mematikan DNS/pemblokirnya. Popup hilang otomatis begitu iklan bisa dimuat (dicek tiap 4 detik, atau tombol "cek lagi").
+- Cara kerja: browser mencoba menjangkau server iklan (alamatnya diambil otomatis dari skrip pertama di public/ads.html, atau isi AD_PROBE_URL). Jika gagal padahal website kita sendiri terjangkau, berarti diblokir. Pengguna offline tidak terkena gerbang.
+- Matikan dengan AD_BLOCK_GATE=false, atau otomatis nonaktif jika KEYS_REQUIRED=false / ads.html belum berisi kode iklan.
+- Catatan jujur: ini pemeriksaan di browser, bukan pengaman mutlak. Orang yang paham teknis bisa melewatinya. Pemblokir yang hanya memblokir sebagian domain iklan (bukan domain skrip utama) juga bisa lolos. Gerbang ini bisa salah menahan pengguna jika server iklan sedang gangguan atau diblokir provider.
