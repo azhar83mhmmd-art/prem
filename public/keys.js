@@ -60,11 +60,11 @@
     if (run) { clearInterval(run.timer); const r = run; run = null; r.resolve(r.earned); }
   }
 
-  function loadAd(url) {
+  function loadAd(url, trust) {
     let cross = false;
     try { cross = new URL(url, location.href).origin !== location.origin; } catch {}
     // Halaman iklan satu domain dengan panel: tanpa allow-same-origin agar kode iklan tidak bisa menyentuh panel.
-    frame.setAttribute('sandbox', 'allow-scripts allow-popups allow-popups-to-escape-sandbox' + (cross ? ' allow-same-origin' : ''));
+    frame.setAttribute('sandbox', 'allow-scripts allow-popups allow-popups-to-escape-sandbox' + (cross || trust ? ' allow-same-origin' : ''));
     frame.src = url + (url.includes('?') ? '&' : '?') + 't=' + Date.now();
   }
 
@@ -127,7 +127,7 @@
     run.last = performance.now();
     setProgress(run.left);
     setMsg('Tonton iklan sampai hitungan selesai.');
-    loadAd(d.adUrl || S.adUrl);
+    loadAd(d.adUrl || S.adUrl, !!d.trust);
     run.timer = setInterval(tick, 250);
   }
 
