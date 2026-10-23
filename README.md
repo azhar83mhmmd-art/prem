@@ -49,3 +49,13 @@ v4.5 - Balasan ulasan, like, room publik, kontrol admin per pengguna, perbaikan 
 
 ## v4.7
 - Popup donasi muncul setiap masuk dan muncul lagi tiap 4 menit setelah ditutup (atur di app.js: donatePop.EVERY).
+
+## v4.8 - Kunci premium lewat iklan
+- 1 iklan ditonton = 1 kunci. 1 kunci dipakai tiap "Verifikasi & Aktifkan VIP" berhasil. Tanpa kunci: tidak bisa kirim magic link maupun aktivasi (dicek di SERVER, bukan hanya tombol).
+- Kartu "Kunci Premium" di halaman Premium menampilkan saldo + tombol "Tonton Iklan". Saat menekan Kirim Magic Link / Verifikasi dengan saldo 0, popup iklan terbuka otomatis lalu proses lanjut setelah kunci didapat.
+- Popup iklan: timer AD_SECONDS detik (default 15), hanya berjalan saat tab terlihat. Server menerbitkan token bertanda tangan saat iklan mulai dan hanya mau memberi kunci jika waktu benar-benar sudah lewat. Satu sesi iklan hanya bisa diklaim sekali, ada jeda antar klaim, batas simpan KEY_MAX, dan batas harian KEY_DAILY per perangkat.
+- Kunci dipotong sebelum menghubungi upstream, dan DIKEMBALIKAN otomatis kalau aktivasi gagal.
+- Developer (perangkat "kenz") tidak butuh kunci.
+- PASANG IKLAN: buka `public/ads.html`, tempel kode dari jaringan iklan (Adsterra, Monetag, PropellerAds, dll.) menggantikan blok "SLOT IKLAN". Halaman ini tampil di iframe ber-sandbox. Atau isi AD_FRAME_URL dengan URL penuh halaman iklan di domain lain.
+- WAJIB: jalankan ulang supabase.sql (bagian v4.8), lalu restart server. Tanpa Supabase, saldo kunci hanya di memori (cukup untuk uji lokal).
+- Catatan jujur: tanpa postback server-ke-server dari jaringan iklan, sistem tidak bisa memastikan iklan benar-benar dilihat, hanya bahwa pengguna menunggu penuh durasi di halaman. Untuk bukti tayang yang kuat, pakai jaringan iklan "rewarded" yang punya callback server.
