@@ -55,7 +55,8 @@ v4.5 - Balasan ulasan, like, room publik, kontrol admin per pengguna, perbaikan 
 - Kartu "Kunci Premium" di halaman Premium menampilkan saldo + tombol "Tonton Iklan". Saat menekan Kirim Magic Link / Verifikasi dengan saldo 0, popup iklan terbuka otomatis lalu proses lanjut setelah kunci didapat.
 - Popup iklan: timer AD_SECONDS detik (default 15), hanya berjalan saat tab terlihat. Server menerbitkan token bertanda tangan saat iklan mulai dan hanya mau memberi kunci jika waktu benar-benar sudah lewat. Satu sesi iklan hanya bisa diklaim sekali, ada jeda antar klaim, batas simpan KEY_MAX, dan batas harian KEY_DAILY per perangkat.
 - Kunci dipotong sebelum menghubungi upstream, dan DIKEMBALIKAN otomatis kalau aktivasi gagal.
-- Developer (perangkat "kenz") tidak butuh kunci.
+- Developer (perangkat "kenz") JUGA wajib menonton iklan (v4.8.1). Hanya KEYS_REQUIRED=false yang mematikan sistem kunci.
+- Iklan kosong di popup? Buka /ads langsung. Kalau di sana muncul tapi di popup kosong, sandbox membatasi kode iklan: isi AD_SAME_ORIGIN=true (kurang aman) atau taruh ads.html di domain terpisah lalu isi AD_FRAME_URL.
 - PASANG IKLAN: buka `public/ads.html`, tempel kode dari jaringan iklan (Adsterra, Monetag, PropellerAds, dll.) menggantikan blok "SLOT IKLAN". Halaman ini tampil di iframe ber-sandbox. Atau isi AD_FRAME_URL dengan URL penuh halaman iklan di domain lain.
 - WAJIB: jalankan ulang supabase.sql (bagian v4.8), lalu restart server. Tanpa Supabase, saldo kunci hanya di memori (cukup untuk uji lokal).
 - Catatan jujur: tanpa postback server-ke-server dari jaringan iklan, sistem tidak bisa memastikan iklan benar-benar dilihat, hanya bahwa pengguna menunggu penuh durasi di halaman. Untuk bukti tayang yang kuat, pakai jaringan iklan "rewarded" yang punya callback server.
