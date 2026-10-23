@@ -34,3 +34,11 @@
 .ad-msg.err { color: var(--red); }
 .ad-btns { display: flex; gap: 10px; width: 100%; flex-wrap: wrap; }
 .ad-btns .btn { flex: 1; justify-content: center; }
+
+/* v4.8.2 - gerbang pemblokir iklan (tidak bisa ditutup) */
+#adgate { z-index: 3000; }
+.adgate-card { box-shadow: 10px 10px 0 var(--red); max-width: 460px; }
+.adgate-card .adgate-main { margin: 0; font-size: .92rem; font-weight: 600; line-height: 1.45; }
+.adgate-card .adgate-msg { margin: 0; min-height: 1.2em; font-size: .82rem; font-weight: 700; color: var(--red); }
+.adgate-card .btn { width: 100%; justify-content: center; }
+.adgate-card li .ic { color: var(--ink); }
