@@ -42,7 +42,8 @@ const KEYS_REQUIRED = String(process.env.KEYS_REQUIRED || 'true').toLowerCase() 
 const AD_SECONDS = Math.min(60, Math.max(5, Number(process.env.AD_SECONDS) || 15));      // lama iklan wajib ditonton
 const KEY_MAX = Math.min(50, Math.max(1, Number(process.env.KEY_MAX) || 5));             // kunci maksimal yang boleh disimpan
 const KEY_DAILY = Math.min(500, Math.max(1, Number(process.env.KEY_DAILY) || 30));       // iklan maksimal per perangkat per 24 jam
-const AD_SAME_ORIGIN = String(process.env.AD_SAME_ORIGIN || 'false').toLowerCase() === 'true'; // izinkan kode iklan memakai penyimpanan browser (kurang aman)
+const AD_SAME_ORIGIN = String(process.env.AD_SAME_ORIGIN || 'true').toLowerCase() === 'true'; // izinkan kode iklan memakai penyimpanan browser (kurang aman)
+const AD_BLOCK_GATE = String(process.env.AD_BLOCK_GATE || 'true').toLowerCase() !== 'false'; // tutup website bagi pengguna pemblokir iklan (DNS/ekstensi)
 const AD_FRAME_URL = process.env.AD_FRAME_URL || '/ads';                                  // halaman berisi iklan (default: public/ads.html)
 const TURNSTILE_SITE_KEY = process.env.TURNSTILE_SITE_KEY || '1x00000000000000000000AA';
 const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || '1x0000000000000000000000000000000AA';
@@ -51,6 +52,17 @@ const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || '1x000000000000
 const PUBLIC_DIR = fs.existsSync(path.join(__dirname, 'public'))
   ? path.join(__dirname, 'public')
   : __dirname;
+// Alamat server iklan yang dipakai untuk mendeteksi pemblokir iklan: otomatis diambil dari skrip pertama di public/ads.html
+// (atau isi AD_PROBE_URL di .env). Kosong = gerbang tidak aktif.
+function adProbeUrl() {
+  if (process.env.AD_PROBE_URL) return process.env.AD_PROBE_URL.trim();
+  try {
+    const html = fs.readFileSync(path.join(PUBLIC_DIR, 'ads.html'), 'utf8').replace(/<!--[\s\S]*?-->/g, '');
+    const m = html.match(/<script[^>]+src=["']((?:https?:)?\/\/[^"']+)["']/i);
+    if (m) return m[1].startsWith('//') ? 'https:' + m[1] : m[1];
+  } catch {}
+  return '';
+}
 const BLOCKED = ['server.js', 'package.json', 'package-lock.json', 'vercel.json', 'supabase.sql'];
 
 // URL bersih (tanpa .html) -> semuanya dilayani oleh index.html
@@ -1402,7 +1414,8 @@ const server = http.createServer(async (req, res) => {
     // Konfigurasi publik untuk frontend (hanya anon key, bukan service key)
     if (pathname === '/config.js') {
       res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
-      return res.end('window.APP_CONFIG=' + JSON.stringify({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, turnstileSiteKey: TURNSTILE_SITE_KEY }) + ';');
+      const probe = adProbeUrl();
+      return res.end('window.APP_CONFIG=' + JSON.stringify({ supabaseUrl: SUPABASE_URL, supabaseAnonKey: SUPABASE_ANON_KEY, turnstileSiteKey: TURNSTILE_SITE_KEY, adGate: KEYS_REQUIRED && AD_BLOCK_GATE && !!probe, adProbe: probe }) + ';');
     }
 
     // Menu admin (halaman tidak diindeks mesin pencari, tidak boleh di-embed)
