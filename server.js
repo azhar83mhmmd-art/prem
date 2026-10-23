@@ -37,6 +37,12 @@ const BLOCK_FP_STRICT = String(process.env.BLOCK_FP_STRICT || 'true').toLowerCas
 const BLOCK_IP = String(process.env.BLOCK_IP || 'false').toLowerCase() === 'true';
 // Batas permintaan aktivasi (kirim link + verifikasi) per perangkat / per IP dalam 10 menit
 const ACT_LIMIT = Number(process.env.ACT_LIMIT || 20);
+// ---- v4.8: sistem kunci (1 kunci = 1 iklan = 1 akun premium) ----
+const KEYS_REQUIRED = String(process.env.KEYS_REQUIRED || 'true').toLowerCase() !== 'false';
+const AD_SECONDS = Math.min(60, Math.max(5, Number(process.env.AD_SECONDS) || 15));      // lama iklan wajib ditonton
+const KEY_MAX = Math.min(50, Math.max(1, Number(process.env.KEY_MAX) || 5));             // kunci maksimal yang boleh disimpan
+const KEY_DAILY = Math.min(500, Math.max(1, Number(process.env.KEY_DAILY) || 30));       // iklan maksimal per perangkat per 24 jam
+const AD_FRAME_URL = process.env.AD_FRAME_URL || '/ads';                                  // halaman berisi iklan (default: public/ads.html)
 const TURNSTILE_SITE_KEY = process.env.TURNSTILE_SITE_KEY || '1x00000000000000000000AA';
 const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || '1x0000000000000000000000000000000AA';
 
@@ -431,8 +437,117 @@ async function verifyTurnstile(token, ip) {
   }
 }
 
+/* =====================================================================
+   v4.8 - KUNCI PREMIUM (iklan)
+   1 iklan ditonton = 1 kunci. 1 kunci dipakai saat "Verifikasi & Aktifkan VIP" berhasil.
+   Semua dicek DI SERVER: saldo kunci disimpan per perangkat (Supabase, atomik lewat fungsi SQL).
+   Tanpa Supabase, saldo disimpan di memori (hanya untuk uji coba lokal, hilang saat restart).
+   ===================================================================== */
+const AD_GAP = Math.max(3, Math.floor(AD_SECONDS * 0.8));   // jeda minimum antar klaim kunci (detik)
+const AD_TOKEN_TTL = 10 * 60 * 1000;
+const KEY_SYS_ERR = 'Sistem kunci belum siap. Pemilik: jalankan ulang supabase.sql (bagian v4.8).';
+const NO_KEY_MSG = 'Kunci habis. Tonton 1 iklan untuk mendapat 1 kunci, lalu coba lagi.';
+
+const memKeys = new Map();     // device -> saldo
+const memClaims = new Map();   // nonce -> { d, t }
+function memCleanClaims() { const lim = Date.now() - 86400000; for (const [k, v] of memClaims) if (v.t < lim) memClaims.delete(k); }
+
+async function keyGet(id) {
+  if (!SB_READY) return memKeys.get(id) || 0;
+  const r = await sb('GET', rest(`am_keys?device_id=eq.${id}&select=keys`));
+  if (!r.ok || !Array.isArray(r.data)) return null;
+  return r.data[0] ? Number(r.data[0].keys) || 0 : 0;
+}
+// Hasil: saldo baru, atau -1 token sudah dipakai, -2 kunci penuh, -3 batas harian, -4 terlalu cepat; null = gagal
+async function keyClaim(id, nonce) {
+  if (!SB_READY) {
+    memCleanClaims();
+    if (memClaims.has(nonce)) return -1;
+    const mine = [...memClaims.values()].filter((v) => v.d === id);
+    if (mine.length >= KEY_DAILY) return -3;
+    if (mine.some((v) => Date.now() - v.t < AD_GAP * 1000)) return -4;
+    const bal = memKeys.get(id) || 0;
+    if (bal >= KEY_MAX) return -2;
+    memClaims.set(nonce, { d: id, t: Date.now() });
+    memKeys.set(id, bal + 1);
+    return bal + 1;
+  }
+  const r = await sb('POST', rest('rpc/am_key_claim'), { p_device: id, p_nonce: nonce, p_max: KEY_MAX, p_daily: KEY_DAILY, p_gap: AD_GAP });
+  return r.ok && typeof r.data === 'number' ? r.data : null;
+}
+// Pakai 1 kunci (atomik). -1 = tidak ada kunci. null = gagal
+async function keyUse(id) {
+  if (!SB_READY) {
+    const bal = memKeys.get(id) || 0;
+    if (bal < 1) return -1;
+    memKeys.set(id, bal - 1);
+    return bal - 1;
+  }
+  const r = await sb('POST', rest('rpc/am_key_use'), { p_device: id });
+  return r.ok && typeof r.data === 'number' ? r.data : null;
+}
+// Kembalikan kunci bila aktivasi gagal di upstream (pengguna tidak rugi)
+async function keyRefund(id) {
+  if (!SB_READY) { const b = (memKeys.get(id) || 0) + 1; memKeys.set(id, b); return b; }
+  const r = await sb('POST', rest('rpc/am_key_refund'), { p_device: id });
+  return r.ok && typeof r.data === 'number' ? r.data : null;
+}
+
+// Developer (perangkat terverifikasi) tidak butuh kunci
+async function keyContext(req, res) {
+  const ident = identify(req);
+  setIdentHeaders(req, res, ident);
+  const g = await guard(ident, '');
+  const free = !KEYS_REQUIRED || !!(g.dev && g.dev.is_dev);
+  return { ident, g, free };
+}
+
+async function handleKeysGet(req, res) {
+  if (rl('keys:' + clientIp(req), 60, 60000)) return sendJson(res, 429, { error: 'Terlalu banyak permintaan.' });
+  const { ident, free } = await keyContext(req, res);
+  const keys = await keyGet(ident.id);
+  if (keys === null) return sendJson(res, 503, { error: KEY_SYS_ERR });
+  sendJson(res, 200, { required: !free, keys, seconds: AD_SECONDS, max: KEY_MAX, daily: KEY_DAILY, adUrl: AD_FRAME_URL });
+}
+
+async function handleAdStart(req, res) {
+  if (!sameOrigin(req)) return sendJson(res, 403, { error: 'Permintaan ditolak.' });
+  const { ident, g, free } = await keyContext(req, res);
+  if (rl('adstart:' + ident.id, 8, 60000) || rl('adstartip:' + ident.ip, 30, 60000)) return sendJson(res, 429, { error: 'Terlalu sering. Tunggu sebentar.' });
+  if (free) return sendJson(res, 200, { free: true });
+  if (g.blocked) return sendJson(res, 403, { blocked: true, error: blockedText(g.reason) });
+  const bal = await keyGet(ident.id);
+  if (bal === null) return sendJson(res, 503, { error: KEY_SYS_ERR });
+  if (bal >= KEY_MAX) return sendJson(res, 409, { full: true, keys: bal, error: `Kunci sudah penuh (maks ${KEY_MAX}). Pakai dulu kunci yang ada.` });
+  const token = sign({ k: 'ad', d: ident.id, n: crypto.randomBytes(12).toString('hex'), t: Date.now(), s: AD_SECONDS });
+  sendJson(res, 200, { token, seconds: AD_SECONDS, adUrl: AD_FRAME_URL });
+}
+
+async function handleAdClaim(req, res) {
+  if (!sameOrigin(req)) return sendJson(res, 403, { error: 'Permintaan ditolak.' });
+  const body = await readJson(req, 2048);
+  if (!body) return sendJson(res, 413, { error: 'Permintaan terlalu besar.' });
+  const { ident, g, free } = await keyContext(req, res);
+  if (rl('adclaim:' + ident.id, 10, 60000)) return sendJson(res, 429, { error: 'Terlalu sering. Tunggu sebentar.' });
+  if (free) return sendJson(res, 200, { free: true });
+  if (g.blocked) return sendJson(res, 403, { blocked: true, error: blockedText(g.reason) });
+  const o = unsign(typeof body.token === 'string' ? body.token : '');
+  if (!o || o.k !== 'ad' || o.d !== ident.id || !/^[0-9a-f]{24}$/.test(o.n || '') || !(o.s >= 5)) return sendJson(res, 400, { error: 'Token iklan tidak valid. Mulai ulang iklannya.' });
+  const age = Date.now() - o.t;
+  if (age > AD_TOKEN_TTL) return sendJson(res, 410, { error: 'Sesi iklan kedaluwarsa. Mulai ulang iklannya.' });
+  if (age < o.s * 1000 - 400) return sendJson(res, 425, { error: 'Iklan belum selesai ditonton.', wait: Math.ceil((o.s * 1000 - age) / 1000) });
+  const v = await keyClaim(ident.id, o.n);
+  if (v === null) return sendJson(res, 503, { error: KEY_SYS_ERR });
+  if (v === -1) return sendJson(res, 409, { error: 'Sesi iklan ini sudah dipakai. Mulai ulang iklannya.' });
+  if (v === -2) return sendJson(res, 409, { full: true, error: `Kunci sudah penuh (maks ${KEY_MAX}).` });
+  if (v === -3) return sendJson(res, 429, { error: `Batas iklan harian tercapai (${KEY_DAILY}/hari). Coba lagi besok.` });
+  if (v === -4) return sendJson(res, 429, { error: 'Terlalu cepat. Tonton iklan satu per satu sampai selesai.' });
+  sendJson(res, 200, { ok: true, keys: v });
+}
+
 /* ---------- Proxy ke upstream ---------- */
 async function proxyUpstream(req, res, pathname) {
+  let reservedFor = '';   // ID perangkat yang kuncinya sudah dipotong (dikembalikan jika aktivasi gagal)
   try {
     if (!sameOrigin(req)) return sendJson(res, 403, { success: false, error: 'Permintaan ditolak.' });
     const payload = await readJson(req, 64 * 1024);
@@ -449,6 +564,15 @@ async function proxyUpstream(req, res, pathname) {
     const g = await guard(ident, name);
     if (g.blocked) return sendJson(res, 403, { success: false, blocked: true, error: blockedText(g.reason) });
 
+    // v4.8: tanpa kunci tidak bisa membuat akun premium (dev dikecualikan). Kirim link hanya mengecek saldo.
+    const keyFree = !KEYS_REQUIRED || !!(g.dev && g.dev.is_dev);
+    let keyBalance = null;
+    if (!keyFree && pathname === '/api/send-link') {
+      keyBalance = await keyGet(ident.id);
+      if (keyBalance === null) return sendJson(res, 503, { success: false, error: KEY_SYS_ERR });
+      if (keyBalance < 1) return sendJson(res, 402, { success: false, noKey: true, keys: 0, error: NO_KEY_MSG });
+    }
+
     // Verifikasi VIP wajib lolos Cloudflare Turnstile (dicek di server, bukan hanya di browser)
     let activationEmail = '';
     if (pathname === '/api/verify-link') {
@@ -456,6 +580,14 @@ async function proxyUpstream(req, res, pathname) {
       if (!okHuman) return sendJson(res, 403, { success: false, error: 'Verifikasi manusia (Cloudflare) gagal atau kedaluwarsa. Ulangi verifikasi.' });
       activationEmail = payload.email;
       delete payload.cfToken;
+      // Potong 1 kunci sebelum menghubungi upstream (atomik, tidak bisa dobel dari banyak tab)
+      if (!keyFree) {
+        const left = await keyUse(ident.id);
+        if (left === null) return sendJson(res, 503, { success: false, error: KEY_SYS_ERR });
+        if (left < 0) return sendJson(res, 402, { success: false, noKey: true, keys: 0, error: NO_KEY_MSG });
+        reservedFor = ident.id;
+        keyBalance = left;
+      }
     }
 
     const r = await fetch(UPSTREAM + pathname, {
@@ -466,21 +598,25 @@ async function proxyUpstream(req, res, pathname) {
     let text = await r.text();
 
     if (pathname === '/api/verify-link') {
+      let ok = r.ok;
       try {
         const data = JSON.parse(text);
         if (data && typeof data === 'object' && !Array.isArray(data)) {
-          const ok = r.ok && data.success !== false && !data.error;
-          if (ok) {
-            data.recorded = await recordActivation(activationEmail, g.dev, ident);
-            text = JSON.stringify(data);
-          }
+          ok = r.ok && data.success !== false && !data.error;
+          if (ok) data.recorded = await recordActivation(activationEmail, g.dev, ident);
+          else if (reservedFor) { const b = await keyRefund(reservedFor); reservedFor = ''; if (b !== null) keyBalance = b; }
+          if (!keyFree && keyBalance !== null) data.keys = keyBalance;
+          text = JSON.stringify(data);
         }
       } catch {}
+      if (reservedFor && !ok) { await keyRefund(reservedFor); reservedFor = ''; }
+      reservedFor = '';
     }
 
     res.writeHead(r.status, { 'Content-Type': r.headers.get('content-type') || 'application/json; charset=utf-8' });
     res.end(text);
   } catch (err) {
+    if (reservedFor) { try { await keyRefund(reservedFor); } catch {} }
     sendJson(res, 502, { success: false, error: err.message });
   }
 }
@@ -1236,6 +1372,8 @@ const server = http.createServer(async (req, res) => {
   try {
     if (req.method === 'POST') {
       if (pathname === '/api/send-link' || pathname === '/api/verify-link') return await proxyUpstream(req, res, pathname);
+      if (pathname === '/api/ad/start') return await handleAdStart(req, res);
+      if (pathname === '/api/ad/claim') return await handleAdClaim(req, res);
       if (pathname === '/api/me') return await handleMe(req, res);
       if (pathname === '/api/name') return await handleName(req, res);
       if (pathname === '/api/dev/link') return await handleDevLink(req, res);
@@ -1252,6 +1390,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method !== 'GET') return sendJson(res, 404, { error: 'Not Found' });
 
     if (pathname === '/api/visitor') return handleVisitor(req, res);
+    if (pathname === '/api/keys') return await handleKeysGet(req, res);
     if (pathname === '/api/chat') return await handleChatGet(req, res, url);
     if (pathname === '/api/chat/unread') return await handleChatUnread(req, res);
     if (pathname === '/api/social/stats') return await handleSocialStats(req, res, url);
@@ -1270,6 +1409,11 @@ const server = http.createServer(async (req, res) => {
       return serveFile(res, '/admin.html', null, {
         'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer'
       });
+    }
+
+    // Halaman iklan (dimuat di iframe ber-sandbox oleh popup iklan)
+    if (pathname === '/ads') {
+      return serveFile(res, '/ads.html', null, { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
     }
 
     // URL bersih: /index.html -> /index
