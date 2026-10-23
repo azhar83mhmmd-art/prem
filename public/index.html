@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="/chat.css">
   <link rel="stylesheet" href="/community.css">
   <link rel="stylesheet" href="/responsive.css">
+  <link rel="stylesheet" href="/keys.css">
   <script>
     (function(){try{
       var a=JSON.parse(localStorage.getItem('am_accent')||'null'); if(a) document.documentElement.setAttribute('data-accent',a);
@@ -76,6 +77,8 @@
     <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></symbol>
     <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 8l3 3M14 10l2 2"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></symbol>
     <symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
     <symbol id="i-reply" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></symbol>
     <symbol id="i-users" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
@@ -316,6 +319,17 @@
         <button class="btn btn-dark" id="blocked-chat" type="button"><svg class="ic"><use href="#i-msg"/></svg><span>Chat Admin</span></button>
       </div>
     </div>
+    <div class="card key-card" id="key-card">
+      <div class="key-l">
+        <span class="key-ic"><svg class="ic"><use href="#i-key"/></svg></span>
+        <div>
+          <span class="kicker">KUNCI PREMIUM</span>
+          <div class="key-num"><b id="key-count">0</b><small>KUNCI</small></div>
+        </div>
+      </div>
+      <p class="key-hint" id="key-hint">1 kunci = 1 akun premium. Dapatkan kunci dengan menonton 1 iklan.</p>
+      <button class="btn" id="key-watch" type="button"><svg class="ic"><use href="#i-play"/></svg><span>Tonton Iklan (+1 Kunci)</span></button>
+    </div>
     <div class="stepper" id="stepper">
       <div class="stp active" data-step="1"><span class="stp-k">LANGKAH 1</span><b>Email</b><svg class="ic"><use href="#i-check"/></svg></div>
       <div class="stp" data-step="2"><span class="stp-k">LANGKAH 2</span><b>Link</b><svg class="ic"><use href="#i-check"/></svg></div>
@@ -553,7 +567,29 @@
 
 </main>
 
-<footer class="footer">AM Premify v4.2 &bull; Developer kenz</footer>
+<footer class="footer">AM Premify v4.8 &bull; Developer kenz</footer>
+<div id="ad-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="ad-title">
+  <div class="modal-card ad-card">
+    <div class="modal-stripe"></div>
+    <div class="modal-body">
+      <div class="ad-top">
+        <h3 id="ad-title">TONTON IKLAN</h3>
+        <button class="ad-x" id="ad-x" type="button" aria-label="Tutup"><svg class="ic sm"><use href="#i-x"/></svg></button>
+      </div>
+      <p class="ad-sub">Tonton sampai hitungan selesai untuk mendapat <b>1 kunci</b>. Tetap di halaman ini, waktu berhenti kalau kamu pindah tab.</p>
+      <div class="ad-frame-wrap"><iframe id="ad-frame" title="Iklan" referrerpolicy="no-referrer" loading="eager"></iframe></div>
+      <div class="ad-prog">
+        <div class="ad-track"><i id="ad-bar"></i></div>
+        <div class="ad-sec"><b id="ad-sec">...</b> / <span id="ad-total">15</span> dtk</div>
+      </div>
+      <p class="ad-msg" id="ad-msg">Menyiapkan iklan...</p>
+      <div class="ad-btns">
+        <button class="btn btn-dark hidden" id="ad-retry" type="button"><svg class="ic"><use href="#i-refresh"/></svg><span>Coba Lagi</span></button>
+        <button class="btn btn-sand" id="ad-cancel" type="button"><svg class="ic"><use href="#i-x"/></svg><span>Batal</span></button>
+      </div>
+    </div>
+  </div>
+</div>
 <div id="warn-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="wm-title">
   <div class="modal-card">
     <div class="modal-stripe"></div>
@@ -794,6 +830,7 @@
 <script src="/ui.js"></script>
 <script src="/device.js"></script>
 <script src="/app.js"></script>
+<script src="/keys.js"></script>
 <script src="/reviews.js"></script>
 <script src="/chat.js"></script>
 <script src="/social.js"></script>
