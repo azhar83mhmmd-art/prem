@@ -196,6 +196,7 @@ async function postJson(url, payload) {
   let data;
   try { data = await res.json(); } catch { data = { success: false, error: 'Respon tidak valid dari server' }; }
   if (res.status === 403 && data && data.blocked) Device.setBlocked(true, '');
+  if (res.status === 402 && data && data.noKey && window.Keys) Keys.setKeys(0);
   const ok = res.ok && data.success !== false && !data.error;
   return { ok, data, status: res.status };
 }
@@ -248,6 +249,8 @@ $('#send-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const email = $('#email').value.trim();
   const btn = $('#send-btn');
+  // v4.8: butuh kunci (tonton iklan dulu bila habis)
+  if (window.Keys && !(await Keys.need())) { term.log('warn', 'Butuh 1 kunci. Tonton iklan untuk mendapatkannya.'); return toast('Butuh 1 kunci: tonton iklan dulu', 'err'); }
   setBtn(btn, true, 'Mengirim...');
   term.log('info', `[*] Menghubungi server verifikasi untuk ${email}...`);
   try {
@@ -276,6 +279,7 @@ $('#verify-form').addEventListener('submit', async (e) => {
     term.log('warn', 'Email target belum diisi. Isi email di Langkah 1 terlebih dahulu.');
     return toast('Isi email target dulu di langkah 1', 'err');
   }
+  if (window.Keys && !(await Keys.need())) { term.log('warn', 'Butuh 1 kunci. Tonton iklan untuk mendapatkannya.'); return toast('Butuh 1 kunci: tonton iklan dulu', 'err'); }
   if (!cf.token) {
     term.log('warn', 'Selesaikan verifikasi manusia (Cloudflare) terlebih dahulu.');
     return toast('Selesaikan verifikasi manusia dulu', 'err');
