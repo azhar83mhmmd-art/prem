@@ -42,7 +42,7 @@ const KEYS_REQUIRED = String(process.env.KEYS_REQUIRED || 'true').toLowerCase() 
 const AD_SECONDS = Math.min(60, Math.max(5, Number(process.env.AD_SECONDS) || 15));      // lama iklan wajib ditonton
 const KEY_MAX = Math.min(50, Math.max(1, Number(process.env.KEY_MAX) || 5));             // kunci maksimal yang boleh disimpan
 const KEY_DAILY = Math.min(500, Math.max(1, Number(process.env.KEY_DAILY) || 30));       // iklan maksimal per perangkat per 24 jam
-const AD_SAME_ORIGIN = String(process.env.AD_SAME_ORIGIN || 'true').toLowerCase() === 'true'; // izinkan kode iklan memakai penyimpanan browser (kurang aman)
+const AD_SAME_ORIGIN = String(process.env.AD_SAME_ORIGIN || 'false').toLowerCase() === 'true'; // izinkan kode iklan memakai penyimpanan browser (kurang aman)
 const AD_BLOCK_GATE = String(process.env.AD_BLOCK_GATE || 'true').toLowerCase() !== 'false'; // tutup website bagi pengguna pemblokir iklan (DNS/ekstensi)
 const AD_FRAME_URL = process.env.AD_FRAME_URL || '/ads';                                  // halaman berisi iklan (default: public/ads.html)
 const TURNSTILE_SITE_KEY = process.env.TURNSTILE_SITE_KEY || '1x00000000000000000000AA';
