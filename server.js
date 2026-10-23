@@ -42,6 +42,7 @@ const KEYS_REQUIRED = String(process.env.KEYS_REQUIRED || 'true').toLowerCase() 
 const AD_SECONDS = Math.min(60, Math.max(5, Number(process.env.AD_SECONDS) || 15));      // lama iklan wajib ditonton
 const KEY_MAX = Math.min(50, Math.max(1, Number(process.env.KEY_MAX) || 5));             // kunci maksimal yang boleh disimpan
 const KEY_DAILY = Math.min(500, Math.max(1, Number(process.env.KEY_DAILY) || 30));       // iklan maksimal per perangkat per 24 jam
+const AD_SAME_ORIGIN = String(process.env.AD_SAME_ORIGIN || 'false').toLowerCase() === 'true'; // izinkan kode iklan memakai penyimpanan browser (kurang aman)
 const AD_FRAME_URL = process.env.AD_FRAME_URL || '/ads';                                  // halaman berisi iklan (default: public/ads.html)
 const TURNSTILE_SITE_KEY = process.env.TURNSTILE_SITE_KEY || '1x00000000000000000000AA';
 const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || '1x0000000000000000000000000000000AA';
@@ -493,12 +494,12 @@ async function keyRefund(id) {
   return r.ok && typeof r.data === 'number' ? r.data : null;
 }
 
-// Developer (perangkat terverifikasi) tidak butuh kunci
+// Semua perangkat (termasuk developer) wajib punya kunci. Hanya KEYS_REQUIRED=false yang mematikan sistem ini.
 async function keyContext(req, res) {
   const ident = identify(req);
   setIdentHeaders(req, res, ident);
   const g = await guard(ident, '');
-  const free = !KEYS_REQUIRED || !!(g.dev && g.dev.is_dev);
+  const free = !KEYS_REQUIRED;   // v4.8.1: developer (kenz) juga wajib menonton iklan
   return { ident, g, free };
 }
 
@@ -507,7 +508,7 @@ async function handleKeysGet(req, res) {
   const { ident, free } = await keyContext(req, res);
   const keys = await keyGet(ident.id);
   if (keys === null) return sendJson(res, 503, { error: KEY_SYS_ERR });
-  sendJson(res, 200, { required: !free, keys, seconds: AD_SECONDS, max: KEY_MAX, daily: KEY_DAILY, adUrl: AD_FRAME_URL });
+  sendJson(res, 200, { required: !free, keys, seconds: AD_SECONDS, max: KEY_MAX, daily: KEY_DAILY, adUrl: AD_FRAME_URL, trust: AD_SAME_ORIGIN });
 }
 
 async function handleAdStart(req, res) {
@@ -520,7 +521,7 @@ async function handleAdStart(req, res) {
   if (bal === null) return sendJson(res, 503, { error: KEY_SYS_ERR });
   if (bal >= KEY_MAX) return sendJson(res, 409, { full: true, keys: bal, error: `Kunci sudah penuh (maks ${KEY_MAX}). Pakai dulu kunci yang ada.` });
   const token = sign({ k: 'ad', d: ident.id, n: crypto.randomBytes(12).toString('hex'), t: Date.now(), s: AD_SECONDS });
-  sendJson(res, 200, { token, seconds: AD_SECONDS, adUrl: AD_FRAME_URL });
+  sendJson(res, 200, { token, seconds: AD_SECONDS, adUrl: AD_FRAME_URL, trust: AD_SAME_ORIGIN });
 }
 
 async function handleAdClaim(req, res) {
@@ -565,7 +566,7 @@ async function proxyUpstream(req, res, pathname) {
     if (g.blocked) return sendJson(res, 403, { success: false, blocked: true, error: blockedText(g.reason) });
 
     // v4.8: tanpa kunci tidak bisa membuat akun premium (dev dikecualikan). Kirim link hanya mengecek saldo.
-    const keyFree = !KEYS_REQUIRED || !!(g.dev && g.dev.is_dev);
+    const keyFree = !KEYS_REQUIRED;
     let keyBalance = null;
     if (!keyFree && pathname === '/api/send-link') {
       keyBalance = await keyGet(ident.id);
