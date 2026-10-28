@@ -590,3 +590,16 @@ grant execute on function public.am_key_refund(text) to service_role;
 -- (Opsional) beri kunci manual ke perangkat tertentu:
 -- insert into public.am_keys (device_id, keys) values ('ID_PERANGKAT', 3)
 --   on conflict (device_id) do update set keys = public.am_keys.keys + 3;
+
+-- =====================================================================
+-- v4.9 - MODE MAINTENANCE (diatur dari /admin > Maintenance)
+-- =====================================================================
+-- 36) Pengaturan situs (key/value). Dipakai server untuk menyimpan teks & status maintenance.
+create table if not exists public.am_settings (
+  key        text primary key,
+  value      jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+alter table public.am_settings enable row level security;
+revoke all on public.am_settings from anon, authenticated;
+-- Tanpa policy = browser tidak bisa membaca/menulis; service_role (server) tetap bisa.
