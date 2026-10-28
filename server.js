@@ -984,7 +984,24 @@ async function adminApi(req, res, url, pathname) {
       sbCount('am_devices', ''),
       sbCount('am_devices', 'blocked=eq.true')
     ]);
-    return sendJson(res, 200, { unread, devices, blocked });
+    const mm = await loadMaint();
+    return sendJson(res, 200, { unread, devices, blocked, maintenance: maintOn(mm) });
+  }
+
+  // v4.9 - mode maintenance
+  if (pathname === '/api/admin/maintenance' && method === 'GET') {
+    const m = await loadMaint(true);
+    return sendJson(res, 200, Object.assign({}, m, { active: maintOn(m) }));
+  }
+  if (pathname === '/api/admin/maintenance' && method === 'POST') {
+    const body = await readJson(req, 8 * 1024);
+    if (!body) return sendJson(res, 413, { error: 'Permintaan terlalu besar.' });
+    const prev = await loadMaint(true);
+    const next = maintNormalize(body, prev);
+    next.updated_at = new Date().toISOString();
+    if (!(await saveMaint(next))) return sendJson(res, 502, { error: 'Gagal menyimpan. Sudah menjalankan supabase.sql bagian v4.9?' });
+    console.log('[AM Premify] Maintenance ' + (maintOn(next) ? 'AKTIF' : 'nonaktif') + ' (diatur dari ' + clientIp(req) + ')');
+    return sendJson(res, 200, Object.assign({}, next, { active: maintOn(next) }));
   }
 
   if (pathname === '/api/admin/activations' && method === 'GET') {
@@ -1358,6 +1375,110 @@ async function handleRoomDelete(req, res) {
   sendJson(res, 200, { ok: true });
 }
 
+/* =====================================================================
+   v4.9 - MODE MAINTENANCE
+   Diatur admin dari /admin > Maintenance. Disimpan di tabel am_settings (key = 'maintenance').
+   Saat aktif: semua halaman publik menampilkan halaman maintenance (HTTP 503) dan semua API publik
+   ditolak di SERVER. Admin yang sedang login tetap bisa memakai website untuk uji coba.
+   ===================================================================== */
+const MAINT_TTL = 5000; // lama cache di memori (ms) supaya polling pengunjung tidak membebani Supabase
+const MAINT_DEFAULT = {
+  enabled: false,
+  badge: 'Pemeliharaan',
+  title: 'Kami sedang berbenah',
+  message: 'Layanan sedang kami tingkatkan supaya lebih cepat dan stabil. Website akan terbuka kembali otomatis setelah selesai.',
+  eta: '',
+  auto_open: false,
+  contact_label: '',
+  contact_url: '',
+  updated_at: ''
+};
+let maintMem = null;                       // salinan terakhir yang berhasil dibaca/disimpan
+let maintCache = { at: 0, v: null };
+let maintDbRetry = 0;                      // jeda baca DB setelah gagal (tabel belum dibuat, dll.)
+
+const maintText = (v, max) => String(v == null ? '' : v)
+  .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u2028\u2029]/g, '')
+  .replace(/\r\n?/g, '\n').trim().slice(0, max);
+const maintLine = (v, max) => maintText(v, max).replace(/\s*\n\s*/g, ' ');
+const maintBool = (v) => v === true || v === 'true' || v === 1;
+
+// Gabungkan masukan (admin / database) ke pengaturan sebelumnya. Hanya kolom yang dikirim yang diubah.
+function maintNormalize(raw, prev) {
+  const b = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const o = Object.assign({}, MAINT_DEFAULT, prev || {});
+  if (b.enabled !== undefined) o.enabled = maintBool(b.enabled);
+  if (b.auto_open !== undefined) o.auto_open = maintBool(b.auto_open);
+  if (b.badge !== undefined) o.badge = maintLine(b.badge, 30) || MAINT_DEFAULT.badge;
+  if (b.title !== undefined) o.title = maintLine(b.title, 80) || MAINT_DEFAULT.title;
+  if (b.message !== undefined) o.message = maintText(b.message, 600) || MAINT_DEFAULT.message;
+  if (b.eta !== undefined) { const t = b.eta ? Date.parse(b.eta) : NaN; o.eta = Number.isFinite(t) ? new Date(t).toISOString() : ''; }
+  if (b.contact_label !== undefined) o.contact_label = maintLine(b.contact_label, 30);
+  if (b.contact_url !== undefined) {
+    let u = '';
+    try { const p = new URL(maintText(b.contact_url, 300)); if (/^https?:$/.test(p.protocol)) u = p.href; } catch {}
+    o.contact_url = u;
+  }
+  if (!o.contact_url) o.contact_label = '';
+  else if (!o.contact_label) o.contact_label = 'Hubungi kami';
+  if (b.updated_at !== undefined) { const t = Date.parse(b.updated_at); o.updated_at = Number.isFinite(t) ? new Date(t).toISOString() : ''; }
+  return o;
+}
+
+async function loadMaint(force) {
+  const now = Date.now();
+  if (!force && maintCache.v && now - maintCache.at < MAINT_TTL) return maintCache.v;
+  let raw = null;
+  if (SB_READY && now >= maintDbRetry) {
+    try {
+      const r = await sb('GET', rest('am_settings?key=eq.maintenance&select=value&limit=1'));
+      if (r.ok && Array.isArray(r.data)) raw = r.data[0] && r.data[0].value ? r.data[0].value : {};
+      else maintDbRetry = now + 60000;
+    } catch { maintDbRetry = now + 30000; }
+  }
+  // Gagal membaca database: pakai salinan terakhir, jangan tiba-tiba membuka/menutup website
+  const v = raw !== null ? maintNormalize(raw, null) : (maintCache.v || maintMem || maintNormalize({}, null));
+  maintCache = { at: now, v };
+  return v;
+}
+
+async function saveMaint(m) {
+  const r = await sb('POST', rest('am_settings?on_conflict=key'), { key: 'maintenance', value: m, updated_at: m.updated_at },
+    { Prefer: 'resolution=merge-duplicates,return=minimal' });
+  if (!r.ok) return false;
+  maintMem = m;
+  maintCache = { at: Date.now(), v: m };
+  maintDbRetry = 0;
+  return true;
+}
+
+// Aktif sungguhan? (opsi "buka otomatis" mematikannya begitu estimasi selesai terlewati)
+const maintOn = (m) => !!m.enabled && !(m.auto_open && m.eta && Date.parse(m.eta) <= Date.now());
+async function maintBlocks(req) { return maintOn(await loadMaint()) && !isAdmin(req); }
+
+function maintPublic(m, req) {
+  return {
+    on: maintOn(m), now: Date.now(), admin: isAdmin(req),
+    badge: m.badge, title: m.title, message: m.message, eta: m.eta,
+    contact_label: m.contact_label, contact_url: m.contact_url, updated_at: m.updated_at
+  };
+}
+
+// Halaman maintenance (HTTP 503 + Retry-After supaya mesin pencari tahu ini sementara).
+// Teks disisipkan langsung ke HTML supaya tampil seketika, tanpa kedip.
+async function serveMaintenance(res) {
+  const m = await loadMaint();
+  fs.readFile(path.join(PUBLIC_DIR, 'maintenance.html'), 'utf8', (err, html) => {
+    if (err) return sendJson(res, 503, { maintenance: true, error: 'Website sedang maintenance. Coba lagi nanti.' });
+    const st = JSON.stringify(maintPublic(m, { headers: {} })).replace(/</g, '\\u003c');
+    res.writeHead(503, {
+      'Content-Type': MIME['.html'], 'Cache-Control': 'no-store', 'Retry-After': '300',
+      'X-Robots-Tag': 'noindex', 'X-Content-Type-Options': 'nosniff'
+    });
+    res.end(html.replace('<!--MT_STATE-->', '<script>window.__MT_STATE=' + st + ';</script>'));
+  });
+}
+
 /* ---------- File statis ---------- */
 function serveFile(res, rel, onMissing, extraHeaders) {
   const file = path.normalize(decodeURIComponent(rel)).replace(/^(\.\.[\/\\])+/, '');
@@ -1383,6 +1504,10 @@ const server = http.createServer(async (req, res) => {
   const { pathname, search } = url;
 
   try {
+    // v4.9 - saat maintenance, semua API publik ditolak di server (admin tetap boleh)
+    if (pathname.startsWith('/api/') && !pathname.startsWith('/api/admin/') && pathname !== '/api/maintenance' && await maintBlocks(req)) {
+      return sendJson(res, 503, { maintenance: true, error: 'Website sedang maintenance. Coba lagi nanti.' });
+    }
     if (req.method === 'POST') {
       if (pathname === '/api/send-link' || pathname === '/api/verify-link') return await proxyUpstream(req, res, pathname);
       if (pathname === '/api/ad/start') return await handleAdStart(req, res);
@@ -1402,6 +1527,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method !== 'GET') return sendJson(res, 404, { error: 'Not Found' });
 
+    if (pathname === '/api/maintenance') return sendJson(res, 200, maintPublic(await loadMaint(), req));
     if (pathname === '/api/visitor') return handleVisitor(req, res);
     if (pathname === '/api/keys') return await handleKeysGet(req, res);
     if (pathname === '/api/chat') return await handleChatGet(req, res, url);
@@ -1425,6 +1551,11 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+    // Halaman maintenance (juga dipakai untuk pratinjau di menu admin)
+    if (pathname === '/maintenance') {
+      return serveFile(res, '/maintenance.html', null, { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
+    }
+
     // Halaman iklan (dimuat di iframe ber-sandbox oleh popup iklan)
     if (pathname === '/ads') {
       return serveFile(res, '/ads.html', null, { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
@@ -1436,7 +1567,10 @@ const server = http.createServer(async (req, res) => {
       return redirect(res, 301, (clean === '/index' || clean === '' ? '/index' : clean) + (search || ''));
     }
 
-    if (PAGES.has(pathname)) return serveFile(res, '/index.html');
+    if (PAGES.has(pathname)) {
+      if (await maintBlocks(req)) return serveMaintenance(res);
+      return serveFile(res, '/index.html');
+    }
 
     // Aset statis; halaman tak dikenal (tanpa ekstensi) diarahkan ke /index
     return serveFile(res, pathname, () => {
