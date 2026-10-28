@@ -125,6 +125,8 @@
     const h = parseHash();
     S.tab = h.tab;
     $$('.adm-tab').forEach((b) => { const on = b.dataset.tab === h.tab; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+    const onTab = $('.adm-tab.on'), bar = $('.adm-tabs');
+    if (onTab && bar) { const a = onTab.getBoundingClientRect(), z = bar.getBoundingClientRect(); bar.scrollBy({ left: a.left - z.left - (z.width - a.width) / 2, behavior: 'smooth' }); }
     ['usr', 'act', 'chat', 'dev', 'com', 'mnt'].forEach((t) => $('#tab-' + t).classList.toggle('hidden', t !== h.tab));
     if (h.tab === 'usr') loadUsers();
     if (h.tab === 'com') loadCom();
