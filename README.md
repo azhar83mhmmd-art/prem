@@ -66,3 +66,12 @@ v4.5 - Balasan ulasan, like, room publik, kontrol admin per pengguna, perbaikan 
 - Cara kerja: browser mencoba menjangkau server iklan (alamatnya diambil otomatis dari skrip pertama di public/ads.html, atau isi AD_PROBE_URL). Jika gagal padahal website kita sendiri terjangkau, berarti diblokir. Pengguna offline tidak terkena gerbang.
 - Matikan dengan AD_BLOCK_GATE=false, atau otomatis nonaktif jika KEYS_REQUIRED=false / ads.html belum berisi kode iklan.
 - Catatan jujur: ini pemeriksaan di browser, bukan pengaman mutlak. Orang yang paham teknis bisa melewatinya. Pemblokir yang hanya memblokir sebagian domain iklan (bukan domain skrip utama) juga bisa lolos. Gerbang ini bisa salah menahan pengguna jika server iklan sedang gangguan atau diblokir provider.
+
+## v4.9 - Mode Maintenance
+- Admin: buka /admin > tab **Maintenance**. Nyalakan saklar, atur label, judul, pesan, estimasi selesai (opsional, tampil sebagai hitung mundur), dan tombol kontak (opsional), lalu **Simpan**. Pratinjau di sebelah kanan ikut berubah saat mengetik.
+- Saat aktif, semua pengunjung melihat halaman maintenance dan website tidak bisa dipakai: halaman diganti (HTTP 503), semua API publik ditolak di SERVER (bukan hanya tampilan), dan halaman yang sudah terbuka otomatis tertutup dalam hitungan detik (dicek tiap 15 dtk).
+- Admin yang sedang login di /admin tetap bisa membuka website untuk uji coba (muncul pita kecil "MAINTENANCE AKTIF" di atas). Buka dari jendela lain / mode samaran untuk melihat tampilan pengunjung, atau buka /maintenance?preview=1.
+- Opsi "Buka otomatis saat estimasi lewat": website terbuka sendiri begitu waktu estimasi selesai, tanpa perlu menekan tombol lagi.
+- Tidak perlu variabel .env baru.
+- WAJIB: jalankan ulang supabase.sql (bagian v4.9, membuat tabel am_settings), lalu restart server.
+- Catatan jujur: halaman & API dijaga di server. Pemeriksaan di browser hanya untuk menutup halaman yang sudah terbuka. Pengunjung yang memakai Supabase anon key langsung (di luar website ini) tidak ikut dihentikan, karena itu di luar kendali server.
