@@ -75,3 +75,12 @@ v4.5 - Balasan ulasan, like, room publik, kontrol admin per pengguna, perbaikan 
 - Tidak perlu variabel .env baru.
 - WAJIB: jalankan ulang supabase.sql (bagian v4.9, membuat tabel am_settings), lalu restart server.
 - Catatan jujur: halaman & API dijaga di server. Pemeriksaan di browser hanya untuk menutup halaman yang sudah terbuka. Pengunjung yang memakai Supabase anon key langsung (di luar website ini) tidak ikut dihentikan, karena itu di luar kendali server.
+
+## v5.0 - Iklan video sponsor (menu admin > Iklan)
+- Admin bisa menambah, mengedit, mengaktifkan/menonaktifkan, dan menghapus iklan video sponsor di /admin tab **Iklan**. Perubahan tampil ke pengunjung dalam beberapa detik (tanpa deploy ulang).
+- Video bisa diunggah langsung dari menu admin (MP4/WebM, maks ADS_VIDEO_MB, default 50 MB) ke Supabase Storage bucket `ads`, atau tempel tautan https:// video yang sudah ada. Gambar sampul opsional (JPG/PNG/WebP, maks 5 MB).
+- Tiap iklan punya judul, nama sponsor, tautan tujuan, dan teks tombol. Video maupun tombol, kalau diklik, membuka tautan itu di tab baru lewat `/api/ad/go?id=...` (klik dihitung, tujuan hanya yang diatur admin).
+- Popup "Tonton Iklan" memutar salah satu iklan sponsor aktif secara acak. Kalau tidak ada yang aktif (atau videonya gagal dimuat), popup kembali memakai iklan Adsterra di public/ads.html seperti sebelumnya. Timer, kunci, dan batas harian tidak berubah.
+- Statistik per iklan: **tayang** = ditonton tuntas (kunci berhasil diklaim), **klik**, dan CTR.
+- WAJIB: jalankan ulang `supabase.sql` bagian v5.0 (tabel am_ad_stats, fungsi am_ad_hit, bucket `ads`), lalu restart server.
+- Catatan: gerbang anti-AdBlock tetap memeriksa server iklan dari skrip pertama di public/ads.html (Adsterra). Isi `AD_PROBE_URL` di .env atau hapus skripnya bila ingin mengubah perilaku itu.
