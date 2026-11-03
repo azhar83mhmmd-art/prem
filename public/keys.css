@@ -42,3 +42,25 @@
 .adgate-card .adgate-msg { margin: 0; min-height: 1.2em; font-size: .82rem; font-weight: 700; color: var(--red); }
 .adgate-card .btn { width: 100%; justify-content: center; }
 .adgate-card li .ic { color: var(--ink); }
+
+/* v5.0 - pemutar iklan video sponsor (diatur admin) */
+.promo { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+.promo-head { display: flex; align-items: center; gap: 10px; }
+.promo-av { flex: none; width: 40px; height: 40px; display: grid; place-items: center; background: var(--pink); border: var(--bd); border-radius: 50%; box-shadow: var(--sh-s); font-family: var(--display); font-size: 1.05rem; text-transform: uppercase; }
+.promo-who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.promo-who b { font-family: var(--display); font-weight: 400; font-size: 1rem; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.promo-who small { font: 700 .66rem var(--mono); letter-spacing: .08em; opacity: .65; }
+.promo-pill { flex: none; padding: 5px 10px; background: var(--ink); color: var(--yellow); border-radius: 999px; font: 700 .72rem var(--mono); white-space: nowrap; }
+.promo-stage { position: relative; width: 100%; height: 250px; background: var(--ink); border: var(--bd); border-radius: 14px; overflow: hidden; box-shadow: var(--sh-s); }
+.promo-stage video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: var(--ink); }
+.promo-hit { position: absolute; inset: 0; z-index: 1; cursor: pointer; }
+.promo-hit:not([href]) { pointer-events: none; cursor: default; }
+.promo-hint { position: absolute; z-index: 2; left: 8px; top: 8px; display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; background: var(--yellow); border: 2.5px solid var(--ink); border-radius: 999px; font: 700 .68rem var(--mono); pointer-events: none; }
+.promo-ctl { position: absolute; z-index: 3; right: 8px; bottom: 8px; display: flex; gap: 8px; }
+.promo-b { width: 38px; height: 38px; display: grid; place-items: center; background: var(--paper); color: var(--ink); border: 2.5px solid var(--ink); border-radius: 10px; box-shadow: 2px 2px 0 var(--ink); cursor: pointer; }
+.promo-b:active { transform: translate(2px, 2px); box-shadow: none; }
+.promo-b .ic { width: 18px; height: 18px; }
+.promo-title { margin: 0; font-weight: 700; font-size: .95rem; line-height: 1.35; }
+.promo-cta { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; background: var(--yellow); color: var(--ink); border: var(--bd); border-radius: 12px; box-shadow: 5px 5px 0 var(--ink); font: 400 1rem var(--display); text-decoration: none; transition: transform .12s, box-shadow .12s; }
+.promo-cta:active { transform: translate(3px, 3px); box-shadow: 2px 2px 0 var(--ink); }
+@media (max-width: 380px) { .promo-stage { height: 215px; } }
