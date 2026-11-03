@@ -603,3 +603,35 @@ create table if not exists public.am_settings (
 alter table public.am_settings enable row level security;
 revoke all on public.am_settings from anon, authenticated;
 -- Tanpa policy = browser tidak bisa membaca/menulis; service_role (server) tetap bisa.
+
+-- =====================================================================
+-- v5.0 - IKLAN VIDEO SPONSOR (diatur dari /admin > Iklan)
+-- =====================================================================
+-- 37) Statistik per iklan sponsor: views = ditonton tuntas (kunci diklaim), clicks = tombol/video diklik
+create table if not exists public.am_ad_stats (
+  id         text primary key,
+  views      bigint not null default 0,
+  clicks     bigint not null default 0,
+  updated_at timestamptz not null default now()
+);
+alter table public.am_ad_stats enable row level security;
+revoke all on public.am_ad_stats from anon, authenticated;
+
+create or replace function public.am_ad_hit(p_id text, p_kind text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if p_id !~ '^[0-9a-f]{12}$' or p_kind not in ('view', 'click') then return; end if;
+  insert into am_ad_stats (id, views, clicks)
+  values (p_id, case when p_kind = 'view' then 1 else 0 end, case when p_kind = 'click' then 1 else 0 end)
+  on conflict (id) do update set
+    views = am_ad_stats.views + case when p_kind = 'view' then 1 else 0 end,
+    clicks = am_ad_stats.clicks + case when p_kind = 'click' then 1 else 0 end,
+    updated_at = now();
+end $$;
+revoke all on function public.am_ad_hit(text, text) from public, anon, authenticated;
+grant execute on function public.am_ad_hit(text, text) to service_role;
+
+-- 38) Bucket penyimpanan video & sampul iklan. Publik hanya bisa MEMBACA; unggah hanya lewat tautan bertanda tangan dari server.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('ads', 'ads', true, 52428800, array['video/mp4', 'video/webm', 'image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do update set public = true, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
