@@ -64,7 +64,8 @@
     conv: null, timers: [], lastErr: false,
     users: [], uq: '', usort: 'acts', uonly: true, uopen: new Set(), uacts: new Map(),
     csub: 'room', com: [], online: 0,
-    mnt: { loaded: false, dirty: false, active: false, saving: false }
+    mnt: { loaded: false, dirty: false, active: false, saving: false },
+    ads: { items: [], sig: '', max: 30, stats: true, vmb: 50, cmb: 5, editing: '', open: false, saving: false, loaded: false }
   };
   const VB = '<svg class="vb" viewBox="0 0 24 24" role="img" aria-label="Developer terverifikasi"><title>Developer terverifikasi</title><path fill="#1d9bf0" stroke="#0d0d0d" stroke-width="1.3" d="M12 1.8l2.4 1.7 2.9-.2 1 2.8 2.5 1.6-.9 2.8.9 2.8-2.5 1.6-1 2.8-2.9-.2L12 20.2l-2.4-1.7-2.9.2-1-2.8-2.5-1.6.9-2.8-.9-2.8 2.5-1.6 1-2.8 2.9.2z"/><path d="M7.8 12.2l3 3 5.6-6" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
@@ -113,7 +114,7 @@
     const [p, q] = h.split('?');
     const [tab, id] = p.split('/');
     return {
-      tab: ['usr', 'act', 'chat', 'dev', 'com', 'mnt'].includes(tab) ? tab : 'usr',
+      tab: ['usr', 'act', 'chat', 'dev', 'com', 'mnt', 'ads'].includes(tab) ? tab : 'usr',
       id: /^[0-9a-f]{32}$/.test(id || '') ? id : '',
       act: Number(new URLSearchParams(q || '').get('act')) || 0
     };
@@ -127,10 +128,11 @@
     $$('.adm-tab').forEach((b) => { const on = b.dataset.tab === h.tab; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
     const onTab = $('.adm-tab.on'), bar = $('.adm-tabs');
     if (onTab && bar) { const a = onTab.getBoundingClientRect(), z = bar.getBoundingClientRect(); bar.scrollBy({ left: a.left - z.left - (z.width - a.width) / 2, behavior: 'smooth' }); }
-    ['usr', 'act', 'chat', 'dev', 'com', 'mnt'].forEach((t) => $('#tab-' + t).classList.toggle('hidden', t !== h.tab));
+    ['usr', 'act', 'chat', 'dev', 'com', 'mnt', 'ads'].forEach((t) => $('#tab-' + t).classList.toggle('hidden', t !== h.tab));
     if (h.tab === 'usr') loadUsers();
     if (h.tab === 'com') loadCom();
     if (h.tab === 'mnt') loadMnt();
+    if (h.tab === 'ads') loadAds();
     if (h.tab === 'act') loadActs(false);
     if (h.tab === 'dev') loadDevs();
     if (h.tab === 'chat') {
@@ -152,6 +154,7 @@
     badge.textContent = d.unread > 99 ? '99+' : d.unread;
     badge.classList.toggle('hidden', !d.unread);
     $('#mnt-badge').classList.toggle('hidden', !d.maintenance);
+    { const ab = $('#ads-badge'); ab.textContent = d.ads || 0; ab.classList.toggle('hidden', !d.ads); }
     if (S.mnt.active !== !!d.maintenance && S.mnt.loaded && !S.mnt.dirty && S.tab === 'mnt') loadMnt(true);
     document.title = (d.unread ? `(${d.unread}) ` : '') + 'Admin - AM Premify';
     if (S.unread >= 0 && d.unread > S.unread && !(S.tab === 'chat' && S.conv)) toast('Pesan baru dari pengguna');
@@ -788,6 +791,201 @@
     S.mnt.dirty = true; mntCounts(); mntPreviewSoon();
   });
 
+
+  /* ---------- Iklan video sponsor (v5.0) ---------- */
+  const adNum = (n) => Number(n || 0).toLocaleString('id-ID');
+
+  function adRow(it) {
+    const ctr = it.views ? Math.round((it.clicks / it.views) * 1000) / 10 : 0;
+    const th = it.poster
+      ? `<img src="${esc(it.poster)}" alt="" loading="lazy">`
+      : `<video src="${esc(it.video)}#t=0.5" muted playsinline preload="metadata"></video>`;
+    return `<article class="ad-row${it.active ? '' : ' off'}" data-id="${esc(it.id)}">
+      <div class="ad-th">${th}</div>
+      <div class="ad-bd">
+        <b>${esc(it.title)}</b>
+        <small>${esc(it.sponsor || 'Tanpa nama sponsor')}</small>
+        <small class="ad-url">${it.url ? I('link') + '<span>' + esc(it.url) + '</span>' : 'Tanpa tautan klik'}</small>
+        <div class="ad-st"><span>${adNum(it.views)} tayang</span><span>${adNum(it.clicks)} klik</span><span>CTR ${ctr}%</span></div>
+      </div>
+      <div class="ad-ac">
+        <label class="sw" aria-label="Aktifkan iklan"><input type="checkbox" data-act="toggle"${it.active ? ' checked' : ''}><span class="sw-k"></span></label>
+        <button class="ibtn" data-act="edit" type="button">${I('edit')}Edit</button>
+        <button class="ibtn danger" data-act="del" type="button">${I('trash')}Hapus</button>
+      </div>
+    </article>`;
+  }
+
+  function adsState() {
+    const a = S.ads, on = a.items.filter((x) => x.active).length;
+    $('#ads-state').textContent = a.items.length ? `${on} aktif dari ${a.items.length} iklan` : 'Belum ada iklan sponsor';
+    $('#ads-nostat').classList.toggle('hidden', a.stats !== false);
+    $('#ads-new').disabled = a.items.length >= a.max;
+    const ab = $('#ads-badge'); ab.textContent = on; ab.classList.toggle('hidden', !on);
+  }
+  function adsRender() {
+    const a = S.ads, list = $('#ads-list');
+    adsState();
+    list.innerHTML = a.items.length
+      ? a.items.map(adRow).join('')
+      : '<div class="ads-empty">Belum ada iklan sponsor. Tekan <b>Tambah Iklan</b>, unggah video yang dikirim sponsor, lalu isi tautan tujuannya.</div>';
+  }
+
+  async function loadAds(force) {
+    try {
+      const d = await api('/api/admin/ads');
+      const a = S.ads;
+      a.max = d.max || a.max; a.stats = d.stats; a.vmb = d.video_mb || a.vmb; a.cmb = d.cover_mb || a.cmb;
+      $('#ad-vmb').textContent = a.vmb;
+      const sig = JSON.stringify(d.items);
+      const changed = sig !== a.sig || force || !a.loaded;
+      if (changed) { a.sig = sig; a.items = d.items; a.loaded = true; adsRender(); }
+      else { adsState(); }
+    } catch (e) { if (e.message !== 'Sesi berakhir') { $('#ads-state').textContent = e.message; } }
+  }
+
+  function adsCounts() {
+    [['title', 'title', 70], ['sponsor', 'sponsor', 40], ['cta', 'cta', 24]].forEach(([c, f, max]) => { $('#ac-' + c).textContent = $('#ad-' + f).value.length + '/' + max; });
+  }
+  function adsPreview() {
+    const u = $('#ad-video').value.trim(), box = $('#ad-pvbox'), v = $('#ad-pv');
+    if (/^https:\/\//i.test(u)) {
+      if (v.dataset.src !== u) { v.dataset.src = u; v.src = u; v.poster = $('#ad-poster').value.trim(); }
+      box.classList.remove('hidden');
+    } else { v.removeAttribute('src'); v.dataset.src = ''; box.classList.add('hidden'); }
+  }
+  function adsOpenForm(it) {
+    const a = S.ads;
+    a.open = true; a.editing = it ? it.id : '';
+    $('#ads-ft').textContent = it ? 'Edit iklan' : 'Iklan baru';
+    $('#ad-title').value = it ? it.title : '';
+    $('#ad-sponsor').value = it ? it.sponsor : '';
+    $('#ad-video').value = it ? it.video : '';
+    $('#ad-poster').value = it ? it.poster : '';
+    $('#ad-url').value = it ? it.url : '';
+    $('#ad-cta').value = it ? it.cta : '';
+    $('#ad-active').checked = it ? !!it.active : true;
+    $('#ads-err').textContent = '';
+    ['#ad-vprog', '#ad-pprog'].forEach((q) => $(q).classList.add('hidden'));
+    $('#ad-pv').dataset.src = '';
+    adsCounts(); adsPreview();
+    $('#ads-form').classList.remove('hidden');
+    $('#ads-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    $('#ad-title').focus({ preventScroll: true });
+  }
+  function adsCloseForm() {
+    S.ads.open = false; S.ads.editing = '';
+    $('#ads-form').classList.add('hidden');
+    const v = $('#ad-pv'); try { v.pause(); } catch {} v.removeAttribute('src'); v.dataset.src = '';
+  }
+
+  // Unggah langsung ke Supabase Storage lewat tautan bertanda tangan dari server
+  async function adsUpload(file, kind) {
+    const pre = kind === 'v' ? '#ad-vprog' : '#ad-pprog', box = $(pre), bar = $('i', box), pct = $('b', box);
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    const type = file.type || ({ mp4: 'video/mp4', webm: 'video/webm', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' })[ext] || '';
+    box.classList.remove('hidden'); bar.style.setProperty('--p', '0%'); pct.textContent = '0%';
+    $('#ads-err').textContent = '';
+    const sg = await api('/api/admin/ads/sign', { method: 'POST', body: { type, size: file.size } });
+    await new Promise((resolve, reject) => {
+      const fd = new FormData();
+      fd.append('cacheControl', '31536000');
+      fd.append('', file);
+      const x = new XMLHttpRequest();
+      x.open('PUT', sg.uploadUrl);
+      if (sg.apikey) { x.setRequestHeader('apikey', sg.apikey); x.setRequestHeader('Authorization', 'Bearer ' + sg.apikey); }
+      x.setRequestHeader('x-upsert', 'false');
+      x.upload.onprogress = (e) => { if (e.lengthComputable) { const p = Math.round((e.loaded / e.total) * 100); bar.style.setProperty('--p', p + '%'); pct.textContent = p + '%'; } };
+      x.onload = () => (x.status >= 200 && x.status < 300 ? resolve() : reject(new Error('Unggah ditolak Supabase (status ' + x.status + '). Cek bucket "ads" dari supabase.sql v5.0.')));
+      x.onerror = () => reject(new Error('Unggah gagal. Periksa koneksi internet.'));
+      x.send(fd);
+    });
+    bar.style.setProperty('--p', '100%'); pct.textContent = 'Selesai';
+    return sg.publicUrl;
+  }
+  async function adsPick(kind, input) {
+    const f = input.files && input.files[0]; input.value = '';
+    if (!f) return;
+    const btn = $(kind === 'v' ? '#ad-vup' : '#ad-pup'); btn.disabled = true;
+    try {
+      const url = await adsUpload(f, kind);
+      $(kind === 'v' ? '#ad-video' : '#ad-poster').value = url;
+      adsPreview();
+      toast(kind === 'v' ? 'Video terunggah' : 'Sampul terunggah');
+    } catch (e) {
+      if (e.message !== 'Sesi berakhir') { $('#ads-err').textContent = e.message; $(kind === 'v' ? '#ad-vprog' : '#ad-pprog').classList.add('hidden'); }
+    } finally { btn.disabled = false; }
+  }
+
+  async function adsSave() {
+    const a = S.ads, err = $('#ads-err');
+    err.textContent = '';
+    const body = {
+      op: 'save', id: a.editing,
+      title: $('#ad-title').value.trim(), sponsor: $('#ad-sponsor').value.trim(),
+      video: $('#ad-video').value.trim(), poster: $('#ad-poster').value.trim(),
+      url: $('#ad-url').value.trim(), cta: $('#ad-cta').value.trim(), active: $('#ad-active').checked
+    };
+    if (!body.title) { err.textContent = 'Judul iklan wajib diisi.'; $('#ad-title').focus(); return; }
+    if (!/^https:\/\//i.test(body.video)) { err.textContent = 'Video wajib diisi: unggah file atau tempel tautan https://.'; $('#ad-video').focus(); return; }
+    if (body.poster && !/^https:\/\//i.test(body.poster)) { err.textContent = 'Tautan sampul harus diawali https://'; $('#ad-poster').focus(); return; }
+    if (body.url && !/^https?:\/\//i.test(body.url)) { err.textContent = 'Tautan klik harus diawali https:// (atau http://).'; $('#ad-url').focus(); return; }
+    const b = $('#ads-save'), label = $('span', b);
+    a.saving = true; b.disabled = true; label.textContent = 'Menyimpan…';
+    try {
+      await api('/api/admin/ads', { method: 'POST', body });
+      toast(a.editing ? 'Iklan diperbarui' : 'Iklan ditambahkan, langsung tayang');
+      adsCloseForm();
+      await loadAds(true);
+    } catch (e) { if (e.message !== 'Sesi berakhir') err.textContent = e.message; }
+    finally { a.saving = false; b.disabled = false; label.textContent = 'Simpan'; }
+  }
+
+  async function adsToggle(id, on, box) {
+    try {
+      await api('/api/admin/ads', { method: 'POST', body: { op: 'toggle', id, active: on } });
+      toast(on ? 'Iklan diaktifkan' : 'Iklan dinonaktifkan');
+      await loadAds(true);
+    } catch (e) { if (box) box.checked = !on; if (e.message !== 'Sesi berakhir') toast(e.message, 'err'); }
+  }
+
+  async function adsDelete(id) {
+    const it = S.ads.items.find((x) => x.id === id);
+    const ok = await UI.confirm({
+      tone: 'danger', icon: 'trash',
+      title: 'Hapus iklan ini?',
+      message: 'Iklan langsung berhenti tayang dan file video yang diunggah lewat menu ini ikut dihapus dari penyimpanan.',
+      preview: it ? { head: it.sponsor || 'Sponsor', text: it.title } : undefined,
+      confirmText: 'Hapus', busyText: 'Menghapus…',
+      onConfirm: async () => { await api('/api/admin/ads', { method: 'POST', body: { op: 'delete', id } }); }
+    });
+    if (!ok) return;
+    toast('Iklan dihapus');
+    loadAds(true);
+  }
+
+  $('#ads-new').addEventListener('click', () => adsOpenForm(null));
+  $('#ads-cancel').addEventListener('click', adsCloseForm);
+  $('#ads-save').addEventListener('click', adsSave);
+  $('#ads-form').addEventListener('submit', (e) => e.preventDefault());
+  $('#ads-form').addEventListener('input', () => { adsCounts(); });
+  $('#ad-video').addEventListener('change', adsPreview);
+  $('#ad-poster').addEventListener('change', () => { const v = $('#ad-pv'); v.poster = $('#ad-poster').value.trim(); });
+  $('#ad-vup').addEventListener('click', () => $('#ad-vfile').click());
+  $('#ad-pup').addEventListener('click', () => $('#ad-pfile').click());
+  $('#ad-vfile').addEventListener('change', (e) => adsPick('v', e.target));
+  $('#ad-pfile').addEventListener('change', (e) => adsPick('p', e.target));
+  $('#ads-list').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-act]'); if (!b || b.dataset.act === 'toggle') return;
+    const id = b.closest('.ad-row').dataset.id;
+    if (b.dataset.act === 'edit') adsOpenForm(S.ads.items.find((x) => x.id === id) || null);
+    else if (b.dataset.act === 'del') adsDelete(id);
+  });
+  $('#ads-list').addEventListener('change', (e) => {
+    const b = e.target.closest('[data-act="toggle"]'); if (!b) return;
+    adsToggle(b.closest('.ad-row').dataset.id, b.checked, b);
+  });
+
   /* ---------- mulai ---------- */
   function poll() {
     if (document.hidden) return;
@@ -797,6 +995,7 @@
     else if (S.tab === 'dev') loadDevs();
     else if (S.tab === 'chat') loadThreads();
     else if (S.tab === 'com') loadCom();
+    else if (S.tab === 'ads') loadAds();
   }
 
   function enter() {
