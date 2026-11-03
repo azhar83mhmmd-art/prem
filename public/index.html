@@ -80,6 +80,9 @@
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
     <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 8l3 3M14 10l2 2"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+    <symbol id="i-vol" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></symbol>
+    <symbol id="i-mute" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4zM22 9l-6 6M16 9l6 6"/></symbol>
     <symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
     <symbol id="i-reply" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></symbol>
     <symbol id="i-users" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
@@ -578,7 +581,25 @@
         <button class="ad-x" id="ad-x" type="button" aria-label="Tutup"><svg class="ic sm"><use href="#i-x"/></svg></button>
       </div>
       <p class="ad-sub">Tonton sampai hitungan selesai untuk mendapat <b>1 kunci</b>. Tetap di halaman ini, waktu berhenti kalau kamu pindah tab.</p>
-      <div class="ad-frame-wrap"><iframe id="ad-frame" title="Iklan" referrerpolicy="no-referrer" loading="eager"></iframe></div>
+      <div class="promo hidden" id="ad-promo">
+        <div class="promo-head">
+          <span class="promo-av" id="promo-av" aria-hidden="true">S</span>
+          <div class="promo-who"><b id="promo-sponsor">Sponsor</b><small id="promo-tag">IKLAN SPONSOR</small></div>
+          <span class="promo-pill" id="promo-left">...</span>
+        </div>
+        <div class="promo-stage" id="promo-stage">
+          <video id="promo-video" muted playsinline loop preload="auto" disablepictureinpicture></video>
+          <a class="promo-hit" id="promo-hit" target="_blank" rel="noopener sponsored" aria-label="Buka iklan"></a>
+          <span class="promo-hint hidden" id="promo-hint"><svg class="ic sm"><use href="#i-ext"/></svg>Ketuk untuk buka</span>
+          <div class="promo-ctl">
+            <button class="promo-b" id="promo-play" type="button" aria-label="Jeda video"><svg class="ic"><use href="#i-pause"/></svg></button>
+            <button class="promo-b" id="promo-mute" type="button" aria-label="Nyalakan suara"><svg class="ic"><use href="#i-mute"/></svg></button>
+          </div>
+        </div>
+        <p class="promo-title" id="promo-title"></p>
+        <a class="promo-cta hidden" id="promo-cta" target="_blank" rel="noopener sponsored"><span id="promo-cta-t">Kunjungi Sponsor</span><svg class="ic"><use href="#i-arrow"/></svg></a>
+      </div>
+      <div class="ad-frame-wrap" id="ad-frame-wrap"><iframe id="ad-frame" title="Iklan" referrerpolicy="no-referrer" loading="eager"></iframe></div>
       <div class="ad-prog">
         <div class="ad-track"><i id="ad-bar"></i></div>
         <div class="ad-sec"><b id="ad-sec">...</b> / <span id="ad-total">15</span> dtk</div>
