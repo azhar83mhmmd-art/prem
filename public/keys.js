@@ -10,6 +10,8 @@
   const card = $('#key-card'), count = $('#key-count'), hint = $('#key-hint'), watchBtn = $('#key-watch');
   const modal = $('#ad-modal'), frame = $('#ad-frame'), bar = $('#ad-bar'), secEl = $('#ad-sec'), msgEl = $('#ad-msg');
   const retryBtn = $('#ad-retry'), cancelBtn = $('#ad-cancel');
+  const promoBox = $('#ad-promo'), frameWrap = $('#ad-frame-wrap'), pv = $('#promo-video');
+  const promoLeft = $('#promo-left'), pPlay = $('#promo-play'), pMute = $('#promo-mute');
 
   async function call(url, body) {
     const opts = body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
@@ -50,17 +52,67 @@
     const done = S.seconds - left;
     bar.style.width = Math.max(0, Math.min(100, (done / S.seconds) * 100)) + '%';
     secEl.textContent = left > 0 ? String(Math.ceil(left)) : '0';
+    if (promoLeft) promoLeft.textContent = left > 0 ? 'Selesai ' + Math.ceil(left) + ' dtk' : 'Selesai';
   }
+
+  /* ---------- pemutar iklan video sponsor (v5.0) ---------- */
+  const pIc = (btn, name) => { const u = btn.querySelector('use'); if (u) u.setAttribute('href', '#i-' + name); };
+  function stopPromo() {
+    try { pv.pause(); } catch {}
+    pv.removeAttribute('src');
+    pv.removeAttribute('poster');
+    try { pv.load(); } catch {}
+    promoBox.classList.add('hidden');
+    frameWrap.classList.remove('hidden');
+    if (run) run.promo = null;
+  }
+  function syncPlayIcon() {
+    const playing = !pv.paused && !pv.ended;
+    pIc(pPlay, playing ? 'pause' : 'play');
+    pPlay.setAttribute('aria-label', playing ? 'Jeda video' : 'Putar video');
+  }
+  function syncMuteIcon() {
+    pIc(pMute, pv.muted ? 'mute' : 'vol');
+    pMute.setAttribute('aria-label', pv.muted ? 'Nyalakan suara' : 'Matikan suara');
+  }
+  function showPromo(p) {
+    const href = p.link ? '/api/ad/go?id=' + encodeURIComponent(p.id) : '';
+    const name = p.sponsor || 'Sponsor';
+    $('#promo-av').textContent = (name.trim()[0] || 'S');
+    $('#promo-sponsor').textContent = name;
+    $('#promo-tag').textContent = p.total > 1 ? 'IKLAN SPONSOR \u00B7 ' + p.pos + ' DARI ' + p.total : 'IKLAN SPONSOR';
+    $('#promo-title').textContent = p.title || '';
+    const hit = $('#promo-hit'), cta = $('#promo-cta');
+    [hit, cta].forEach((a) => { if (href) a.setAttribute('href', href); else a.removeAttribute('href'); });
+    cta.classList.toggle('hidden', !href);
+    $('#promo-hint').classList.toggle('hidden', !href);
+    if (href) $('#promo-cta-t').textContent = p.cta || 'Kunjungi Sponsor';
+    pv.muted = true; syncMuteIcon();
+    pv.poster = p.poster || '';
+    pv.onerror = () => { if (!run || !run.promo) return; log('warn', 'Video sponsor gagal dimuat, pakai iklan cadangan.'); const u = run.fallback; stopPromo(); if (u) loadAd(u.url, u.trust, true); };
+    pv.onplay = pv.onpause = syncPlayIcon;
+    pv.src = p.video;
+    promoBox.classList.remove('hidden');
+    frameWrap.classList.add('hidden');
+    run.promo = p;
+    const pr = pv.play(); if (pr && pr.catch) pr.catch(() => syncPlayIcon());
+    syncPlayIcon();
+  }
+  pPlay.addEventListener('click', () => { if (pv.paused) { run && (run.userPaused = false); pv.play().catch(() => {}); } else { run && (run.userPaused = true); pv.pause(); } });
+  pMute.addEventListener('click', () => { pv.muted = !pv.muted; syncMuteIcon(); if (pv.paused && !(run && run.userPaused)) pv.play().catch(() => {}); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && run && run.promo && !run.userPaused) pv.play().catch(() => {}); });
 
   function openModal() { modal.classList.remove('hidden'); document.body.classList.add('no-scroll'); }
   function closeModal() {
     modal.classList.add('hidden');
     document.body.classList.remove('no-scroll');
     frame.removeAttribute('src');
+    stopPromo();
     if (run) { clearInterval(run.timer); const r = run; run = null; r.resolve(r.earned); }
   }
 
-  function loadAd(url, trust) {
+  function loadAd(url, trust, asFallback) {
+    if (asFallback) { frameWrap.classList.remove('hidden'); promoBox.classList.add('hidden'); }
     let cross = false;
     try { cross = new URL(url, location.href).origin !== location.origin; } catch {}
     // Halaman iklan satu domain dengan panel: tanpa allow-same-origin agar kode iklan tidak bisa menyentuh panel.
@@ -127,7 +179,9 @@
     run.last = performance.now();
     setProgress(run.left);
     setMsg('Tonton iklan sampai hitungan selesai.');
-    loadAd(d.adUrl || S.adUrl, !!d.trust);
+    run.fallback = { url: d.adUrl || S.adUrl, trust: !!d.trust };
+    if (d.promo && d.promo.video) showPromo(d.promo);        // iklan video sponsor dari admin
+    else loadAd(run.fallback.url, run.fallback.trust);       // tidak ada sponsor aktif: iklan Adsterra seperti biasa
     run.timer = setInterval(tick, 250);
   }
 
