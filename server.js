@@ -532,8 +532,9 @@ async function handleAdStart(req, res) {
   const bal = await keyGet(ident.id);
   if (bal === null) return sendJson(res, 503, { error: KEY_SYS_ERR });
   if (bal >= KEY_MAX) return sendJson(res, 409, { full: true, keys: bal, error: `Kunci sudah penuh (maks ${KEY_MAX}). Pakai dulu kunci yang ada.` });
-  const token = sign({ k: 'ad', d: ident.id, n: crypto.randomBytes(12).toString('hex'), t: Date.now(), s: AD_SECONDS });
-  sendJson(res, 200, { token, seconds: AD_SECONDS, adUrl: AD_FRAME_URL, trust: AD_SAME_ORIGIN });
+  const promo = await adsPick();   // v5.0: iklan video sponsor (null = pakai iklan Adsterra di /ads)
+  const token = sign({ k: 'ad', d: ident.id, n: crypto.randomBytes(12).toString('hex'), t: Date.now(), s: AD_SECONDS, p: promo ? promo.id : '' });
+  sendJson(res, 200, { token, seconds: AD_SECONDS, adUrl: AD_FRAME_URL, trust: AD_SAME_ORIGIN, promo });
 }
 
 async function handleAdClaim(req, res) {
@@ -555,6 +556,7 @@ async function handleAdClaim(req, res) {
   if (v === -2) return sendJson(res, 409, { full: true, error: `Kunci sudah penuh (maks ${KEY_MAX}).` });
   if (v === -3) return sendJson(res, 429, { error: `Batas iklan harian tercapai (${KEY_DAILY}/hari). Coba lagi besok.` });
   if (v === -4) return sendJson(res, 429, { error: 'Terlalu cepat. Tonton iklan satu per satu sampai selesai.' });
+  if (o.p) adHit(o.p, 'view');   // v5.0: hitung iklan sponsor yang ditonton tuntas
   sendJson(res, 200, { ok: true, keys: v });
 }
 
@@ -985,7 +987,8 @@ async function adminApi(req, res, url, pathname) {
       sbCount('am_devices', 'blocked=eq.true')
     ]);
     const mm = await loadMaint();
-    return sendJson(res, 200, { unread, devices, blocked, maintenance: maintOn(mm) });
+    const am = await loadAds();
+    return sendJson(res, 200, { unread, devices, blocked, maintenance: maintOn(mm), ads: am.items.filter((x) => x.active).length });
   }
 
   // v4.9 - mode maintenance
@@ -1002,6 +1005,72 @@ async function adminApi(req, res, url, pathname) {
     if (!(await saveMaint(next))) return sendJson(res, 502, { error: 'Gagal menyimpan. Sudah menjalankan supabase.sql bagian v4.9?' });
     console.log('[AM Premify] Maintenance ' + (maintOn(next) ? 'AKTIF' : 'nonaktif') + ' (diatur dari ' + clientIp(req) + ')');
     return sendJson(res, 200, Object.assign({}, next, { active: maintOn(next) }));
+  }
+
+  // v5.0 - iklan video sponsor
+  if (pathname === '/api/admin/ads' && method === 'GET') {
+    const [m, st] = await Promise.all([loadAds(true), adStats()]);
+    const items = m.items.map((i) => Object.assign({}, i, { views: (st.map[i.id] || {}).views || 0, clicks: (st.map[i.id] || {}).clicks || 0 }));
+    return sendJson(res, 200, { items, updated_at: m.updated_at, max: ADS_MAX, stats: st.ok, video_mb: ADS_VIDEO_MB, cover_mb: ADS_COVER_MB });
+  }
+  if (pathname === '/api/admin/ads' && method === 'POST') {
+    const body = await readJson(req, 8 * 1024);
+    if (!body) return sendJson(res, 413, { error: 'Permintaan terlalu besar.' });
+    const prev = await loadAds(true);
+    const items = prev.items.slice();
+    const id = typeof body.id === 'string' ? body.id : '';
+    const idx = items.findIndex((x) => x.id === id);
+    let dropped = [];
+    if (body.op === 'save') {
+      if (idx < 0 && items.length >= ADS_MAX) return sendJson(res, 400, { error: `Maksimal ${ADS_MAX} iklan. Hapus yang tidak dipakai dulu.` });
+      const it = adsItem(body, idx >= 0 ? items[idx] : null);
+      if (!it.video) return sendJson(res, 400, { error: 'Video wajib diisi dan harus berupa tautan https://.' });
+      if (body.url && !it.url) return sendJson(res, 400, { error: 'Tautan klik harus diawali http:// atau https://.' });
+      if (!it.title) return sendJson(res, 400, { error: 'Judul iklan wajib diisi.' });
+      if (idx >= 0) {
+        if (items[idx].video !== it.video) dropped.push(items[idx].video);
+        if (items[idx].poster && items[idx].poster !== it.poster) dropped.push(items[idx].poster);
+        it.id = items[idx].id; it.created_at = items[idx].created_at;
+        items[idx] = it;
+      } else {
+        it.id = crypto.randomBytes(6).toString('hex');
+        it.created_at = new Date().toISOString();
+        items.unshift(it);
+      }
+    } else if (body.op === 'toggle') {
+      if (idx < 0) return sendJson(res, 404, { error: 'Iklan tidak ditemukan.' });
+      items[idx] = adsItem({ active: body.active }, items[idx]);
+    } else if (body.op === 'delete') {
+      if (idx < 0) return sendJson(res, 404, { error: 'Iklan tidak ditemukan.' });
+      dropped = [items[idx].video, items[idx].poster];
+      items.splice(idx, 1);
+    } else return sendJson(res, 400, { error: 'Perintah tidak dikenal.' });
+    const next = { items, updated_at: new Date().toISOString() };
+    if (!(await saveAds(next))) return sendJson(res, 502, { error: 'Gagal menyimpan. Sudah menjalankan supabase.sql bagian v5.0?' });
+    dropped.forEach(adsDropFile);
+    console.log('[AM Premify] Iklan sponsor diubah (' + body.op + ') dari ' + clientIp(req) + ', aktif: ' + items.filter((x) => x.active).length + '/' + items.length);
+    return sendJson(res, 200, { ok: true, updated_at: next.updated_at });
+  }
+  // Tautan unggah bertanda tangan: browser admin mengirim file langsung ke Supabase Storage (tidak lewat server ini,
+  // jadi tidak kena batas ukuran body Vercel).
+  if (pathname === '/api/admin/ads/sign' && method === 'POST') {
+    const body = await readJson(req, 2048);
+    if (!body) return sendJson(res, 413, { error: 'Permintaan terlalu besar.' });
+    const spec = ADS_UPLOAD_TYPES[String(body.type || '')];
+    if (!spec) return sendJson(res, 400, { error: 'Format tidak didukung. Video: MP4 atau WebM. Sampul: JPG, PNG, atau WebP.' });
+    const mb = spec[1] === 'v' ? ADS_VIDEO_MB : ADS_COVER_MB;
+    const size = Number(body.size) || 0;
+    if (size <= 0 || size > mb * 1024 * 1024) return sendJson(res, 400, { error: `Ukuran file maksimal ${mb} MB.` });
+    const name = (spec[1] === 'v' ? 'video/' : 'cover/') + Date.now().toString(36) + crypto.randomBytes(5).toString('hex') + '.' + spec[0];
+    const r = await sb('POST', `/storage/v1/object/upload/sign/${ADS_BUCKET}/${name}`, {});
+    let token = r.ok && r.data && typeof r.data === 'object' ? String(r.data.token || '') : '';
+    if (!token && r.ok && r.data && r.data.url) { try { token = new URL(String(r.data.url), 'http://x').searchParams.get('token') || ''; } catch {} }
+    if (!token) return sendJson(res, 502, { error: 'Gagal menyiapkan unggahan. Sudah menjalankan supabase.sql bagian v5.0 (bucket "ads")? Atau tempel tautan video langsung.' });
+    return sendJson(res, 200, {
+      uploadUrl: `${SUPABASE_URL}/storage/v1/object/upload/sign/${ADS_BUCKET}/${name}?token=${encodeURIComponent(token)}`,
+      publicUrl: `${SUPABASE_URL}/storage/v1/object/public/${ADS_BUCKET}/${name}`,
+      apikey: SUPABASE_ANON_KEY
+    });
   }
 
   if (pathname === '/api/admin/activations' && method === 'GET') {
@@ -1479,6 +1548,122 @@ async function serveMaintenance(res) {
   });
 }
 
+/* ---------- v5.0 - IKLAN VIDEO SPONSOR (diatur dari /admin > Iklan) ---------- */
+const ADS_MAX = 30;            // jumlah iklan sponsor maksimal
+const ADS_TTL = 4000;          // lama cache di memori (ms): perubahan admin tampil di pengunjung dalam hitungan detik
+const ADS_BUCKET = 'ads';      // bucket Supabase Storage (dibuat oleh supabase.sql v5.0)
+const ADS_VIDEO_MB = Math.min(200, Math.max(1, Number(process.env.ADS_VIDEO_MB) || 50));
+const ADS_COVER_MB = 5;
+const ADS_UPLOAD_TYPES = { 'video/mp4': ['mp4', 'v'], 'video/webm': ['webm', 'v'], 'image/jpeg': ['jpg', 'i'], 'image/png': ['png', 'i'], 'image/webp': ['webp', 'i'] };
+const ADS_ID = /^[0-9a-f]{12}$/;
+let adsMem = null;
+let adsCache = { at: 0, v: null };
+let adsDbRetry = 0;
+
+const adsHttps = (v) => { try { const p = new URL(maintText(v, 600)); return p.protocol === 'https:' ? p.href : ''; } catch { return ''; } };
+const adsLink = (v) => { try { const p = new URL(maintText(v, 600)); return /^https?:$/.test(p.protocol) ? p.href : ''; } catch { return ''; } };
+
+// Satu iklan: hanya kolom yang dikirim yang diubah. Video & sampul wajib https, tautan klik boleh http/https.
+function adsItem(raw, prev) {
+  const b = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const o = Object.assign({ id: '', title: '', sponsor: '', video: '', poster: '', url: '', cta: '', active: true, created_at: '' }, prev || {});
+  if (b.title !== undefined) o.title = maintLine(b.title, 70);
+  if (b.sponsor !== undefined) o.sponsor = maintLine(b.sponsor, 40);
+  if (b.video !== undefined) o.video = adsHttps(b.video);
+  if (b.poster !== undefined) o.poster = adsHttps(b.poster);
+  if (b.url !== undefined) o.url = adsLink(b.url);
+  if (b.cta !== undefined) o.cta = maintLine(b.cta, 24);
+  if (b.active !== undefined) o.active = maintBool(b.active);
+  if (!o.url) o.cta = ''; else if (!o.cta) o.cta = 'Kunjungi Sponsor';
+  return o;
+}
+
+function adsClean(raw) {
+  const arr = raw && Array.isArray(raw.items) ? raw.items : [];
+  const items = [];
+  for (const x of arr.slice(0, ADS_MAX)) {
+    if (!x || !ADS_ID.test(String(x.id || ''))) continue;
+    const it = adsItem(x, null);
+    it.id = x.id;
+    const t = Date.parse(x.created_at);
+    it.created_at = Number.isFinite(t) ? new Date(t).toISOString() : '';
+    if (it.video) items.push(it);
+  }
+  const t = Date.parse(raw && raw.updated_at);
+  return { items, updated_at: Number.isFinite(t) ? new Date(t).toISOString() : '' };
+}
+
+async function loadAds(force) {
+  const now = Date.now();
+  if (!force && adsCache.v && now - adsCache.at < ADS_TTL) return adsCache.v;
+  let raw = null;
+  if (SB_READY && now >= adsDbRetry) {
+    try {
+      const r = await sb('GET', rest('am_settings?key=eq.ads&select=value&limit=1'));
+      if (r.ok && Array.isArray(r.data)) raw = r.data[0] && r.data[0].value ? r.data[0].value : {};
+      else adsDbRetry = now + 30000;
+    } catch { adsDbRetry = now + 20000; }
+  }
+  // Gagal membaca database: pakai salinan terakhir
+  const v = raw !== null ? adsClean(raw) : (adsCache.v || adsMem || adsClean({}));
+  adsCache = { at: now, v };
+  return v;
+}
+
+async function saveAds(m) {
+  const r = await sb('POST', rest('am_settings?on_conflict=key'), { key: 'ads', value: m, updated_at: m.updated_at },
+    { Prefer: 'resolution=merge-duplicates,return=minimal' });
+  if (!r.ok) return false;
+  adsMem = m;
+  adsCache = { at: Date.now(), v: m };
+  adsDbRetry = 0;
+  return true;
+}
+
+async function adStats() {
+  const o = {};
+  const r = await sb('GET', rest('am_ad_stats?select=id,views,clicks'));
+  if (r.ok && Array.isArray(r.data)) r.data.forEach((x) => { o[x.id] = { views: Number(x.views) || 0, clicks: Number(x.clicks) || 0 }; });
+  return { ok: r.ok, map: o };
+}
+function adHit(id, kind) {
+  if (!SB_READY || !ADS_ID.test(String(id || ''))) return;
+  sb('POST', rest('rpc/am_ad_hit'), { p_id: id, p_kind: kind }).catch(() => {});
+}
+
+// Pilih satu iklan sponsor aktif secara acak. null = tidak ada sponsor aktif (popup memakai iklan Adsterra di /ads).
+async function adsPick() {
+  const m = await loadAds();
+  const act = m.items.filter((x) => x.active);
+  if (!act.length) return null;
+  const i = crypto.randomInt(act.length);
+  const it = act[i];
+  return { id: it.id, title: it.title, sponsor: it.sponsor, video: it.video, poster: it.poster, cta: it.cta, link: !!it.url, pos: i + 1, total: act.length };
+}
+
+// Hapus file video / sampul di Storage bila milik bucket kita (best-effort)
+function adsDropFile(url) {
+  if (!SB_READY || !url) return;
+  const pre = SUPABASE_URL + '/storage/v1/object/public/' + ADS_BUCKET + '/';
+  if (!url.startsWith(pre)) return;
+  const p = url.slice(pre.length);
+  if (!/^(video|cover)\/[a-z0-9]+\.(mp4|webm|jpg|png|webp)$/.test(p)) return;
+  sb('DELETE', '/storage/v1/object/' + ADS_BUCKET + '/' + p).catch(() => {});
+}
+
+// Klik iklan: hitung lalu arahkan ke tautan yang diatur admin (hanya lewat id, bukan alamat sembarang)
+async function handleAdGo(req, res, url) {
+  const id = url.searchParams.get('id') || '';
+  if (rl('adgo:' + clientIp(req), 40, 60000)) return sendJson(res, 429, { error: 'Terlalu sering. Tunggu sebentar.' });
+  if (!ADS_ID.test(id)) return sendJson(res, 404, { error: 'Iklan tidak ditemukan.' });
+  const m = await loadAds();
+  const it = m.items.find((x) => x.id === id);
+  if (!it || !it.url) return sendJson(res, 404, { error: 'Tautan iklan tidak ditemukan.' });
+  adHit(id, 'click');
+  res.writeHead(302, { Location: it.url, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Robots-Tag': 'noindex, nofollow' });
+  res.end();
+}
+
 /* ---------- File statis ---------- */
 function serveFile(res, rel, onMissing, extraHeaders) {
   const file = path.normalize(decodeURIComponent(rel)).replace(/^(\.\.[\/\\])+/, '');
@@ -1530,6 +1715,7 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/api/maintenance') return sendJson(res, 200, maintPublic(await loadMaint(), req));
     if (pathname === '/api/visitor') return handleVisitor(req, res);
     if (pathname === '/api/keys') return await handleKeysGet(req, res);
+    if (pathname === '/api/ad/go') return await handleAdGo(req, res, url);
     if (pathname === '/api/chat') return await handleChatGet(req, res, url);
     if (pathname === '/api/chat/unread') return await handleChatUnread(req, res);
     if (pathname === '/api/social/stats') return await handleSocialStats(req, res, url);
