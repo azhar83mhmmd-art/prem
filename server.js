@@ -40,8 +40,10 @@ const ACT_LIMIT = Number(process.env.ACT_LIMIT || 20);
 // ---- v4.8: sistem kunci (1 kunci = 1 iklan = 1 akun premium) ----
 const KEYS_REQUIRED = String(process.env.KEYS_REQUIRED || 'true').toLowerCase() !== 'false';
 const AD_SECONDS = Math.min(60, Math.max(5, Number(process.env.AD_SECONDS) || 15));      // lama iklan wajib ditonton
-const KEY_MAX = Math.min(50, Math.max(1, Number(process.env.KEY_MAX) || 5));             // kunci maksimal yang boleh disimpan
-const KEY_DAILY = Math.min(500, Math.max(1, Number(process.env.KEY_DAILY) || 30));       // iklan maksimal per perangkat per 24 jam
+// v5.2: kunci TANPA BATAS secara default (0 = tanpa batas). Isi angka di .env hanya jika ingin membatasi.
+const KEY_MAX = Math.min(1000000, Math.max(0, Math.floor(Number(process.env.KEY_MAX) || 0)));   // kunci maksimal yang boleh ditabung (0 = tanpa batas)
+const KEY_DAILY = Math.min(1000000, Math.max(0, Math.floor(Number(process.env.KEY_DAILY) || 0))); // iklan maksimal per perangkat per 24 jam (0 = tanpa batas)
+const NO_LIMIT = 2000000000;   // nilai besar untuk fungsi SQL am_key_claim saat tanpa batas (tidak perlu menjalankan ulang SQL)
 const AD_SAME_ORIGIN = String(process.env.AD_SAME_ORIGIN || 'false').toLowerCase() === 'true'; // izinkan kode iklan memakai penyimpanan browser (kurang aman)
 const AD_BLOCK_GATE = String(process.env.AD_BLOCK_GATE || 'true').toLowerCase() !== 'false'; // tutup website bagi pengguna pemblokir iklan (DNS/ekstensi)
 const AD_FRAME_URL = process.env.AD_FRAME_URL || '/ads';                                  // halaman berisi iklan (default: public/ads.html)
@@ -457,7 +459,7 @@ async function verifyTurnstile(token, ip) {
    Tanpa Supabase, saldo disimpan di memori (hanya untuk uji coba lokal, hilang saat restart).
    ===================================================================== */
 const AD_GAP = Math.max(3, Math.floor(AD_SECONDS * 0.8));   // jeda minimum antar klaim kunci (detik)
-const AD_TOKEN_TTL = 10 * 60 * 1000;
+const AD_TOKEN_TTL = 10 * 60 * 1000;   // v5.2: ditambah lama iklan itu sendiri (iklan panjang)
 const KEY_SYS_ERR = 'Sistem kunci belum siap. Pemilik: jalankan ulang supabase.sql (bagian v4.8).';
 const NO_KEY_MSG = 'Kunci habis. Tonton 1 iklan untuk mendapat 1 kunci, lalu coba lagi.';
 
@@ -477,15 +479,15 @@ async function keyClaim(id, nonce) {
     memCleanClaims();
     if (memClaims.has(nonce)) return -1;
     const mine = [...memClaims.values()].filter((v) => v.d === id);
-    if (mine.length >= KEY_DAILY) return -3;
+    if (KEY_DAILY > 0 && mine.length >= KEY_DAILY) return -3;
     if (mine.some((v) => Date.now() - v.t < AD_GAP * 1000)) return -4;
     const bal = memKeys.get(id) || 0;
-    if (bal >= KEY_MAX) return -2;
+    if (KEY_MAX > 0 && bal >= KEY_MAX) return -2;
     memClaims.set(nonce, { d: id, t: Date.now() });
     memKeys.set(id, bal + 1);
     return bal + 1;
   }
-  const r = await sb('POST', rest('rpc/am_key_claim'), { p_device: id, p_nonce: nonce, p_max: KEY_MAX, p_daily: KEY_DAILY, p_gap: AD_GAP });
+  const r = await sb('POST', rest('rpc/am_key_claim'), { p_device: id, p_nonce: nonce, p_max: KEY_MAX || NO_LIMIT, p_daily: KEY_DAILY || NO_LIMIT, p_gap: AD_GAP });
   return r.ok && typeof r.data === 'number' ? r.data : null;
 }
 // Pakai 1 kunci (atomik). -1 = tidak ada kunci. null = gagal
@@ -531,10 +533,12 @@ async function handleAdStart(req, res) {
   if (g.blocked) return sendJson(res, 403, { blocked: true, error: blockedText(g.reason) });
   const bal = await keyGet(ident.id);
   if (bal === null) return sendJson(res, 503, { error: KEY_SYS_ERR });
-  if (bal >= KEY_MAX) return sendJson(res, 409, { full: true, keys: bal, error: `Kunci sudah penuh (maks ${KEY_MAX}). Pakai dulu kunci yang ada.` });
+  if (KEY_MAX > 0 && bal >= KEY_MAX) return sendJson(res, 409, { full: true, keys: bal, error: `Kunci sudah penuh (maks ${KEY_MAX}). Pakai dulu kunci yang ada.` });
   const promo = await adsPick();   // v5.0: iklan video sponsor (null = pakai iklan Adsterra di /ads)
-  const token = sign({ k: 'ad', d: ident.id, n: crypto.randomBytes(12).toString('hex'), t: Date.now(), s: AD_SECONDS, p: promo ? promo.id : '' });
-  sendJson(res, 200, { token, seconds: AD_SECONDS, adUrl: AD_FRAME_URL, trust: AD_SAME_ORIGIN, promo });
+  // v5.2: lama iklan mengikuti panjang video sponsor (diisi admin); tanpa sponsor / durasi kosong = AD_SECONDS
+  const secs = promo && promo.seconds >= 5 ? promo.seconds : AD_SECONDS;
+  const token = sign({ k: 'ad', d: ident.id, n: crypto.randomBytes(12).toString('hex'), t: Date.now(), s: secs, p: promo ? promo.id : '' });
+  sendJson(res, 200, { token, seconds: secs, adUrl: AD_FRAME_URL, trust: AD_SAME_ORIGIN, promo });
 }
 
 async function handleAdClaim(req, res) {
@@ -548,7 +552,7 @@ async function handleAdClaim(req, res) {
   const o = unsign(typeof body.token === 'string' ? body.token : '');
   if (!o || o.k !== 'ad' || o.d !== ident.id || !/^[0-9a-f]{24}$/.test(o.n || '') || !(o.s >= 5)) return sendJson(res, 400, { error: 'Token iklan tidak valid. Mulai ulang iklannya.' });
   const age = Date.now() - o.t;
-  if (age > AD_TOKEN_TTL) return sendJson(res, 410, { error: 'Sesi iklan kedaluwarsa. Mulai ulang iklannya.' });
+  if (age > AD_TOKEN_TTL + o.s * 1000) return sendJson(res, 410, { error: 'Sesi iklan kedaluwarsa. Mulai ulang iklannya.' });
   if (age < o.s * 1000 - 400) return sendJson(res, 425, { error: 'Iklan belum selesai ditonton.', wait: Math.ceil((o.s * 1000 - age) / 1000) });
   const v = await keyClaim(ident.id, o.n);
   if (v === null) return sendJson(res, 503, { error: KEY_SYS_ERR });
@@ -994,7 +998,8 @@ async function adminApi(req, res, url, pathname) {
   // v4.9 - mode maintenance
   if (pathname === '/api/admin/maintenance' && method === 'GET') {
     const m = await loadMaint(true);
-    return sendJson(res, 200, Object.assign({}, m, { active: maintOn(m) }));
+    const raw = await readMaintRaw();
+    return sendJson(res, 200, Object.assign({}, m, { active: maintOn(m), db: SB_READY, db_ok: raw !== null }));
   }
   if (pathname === '/api/admin/maintenance' && method === 'POST') {
     const body = await readJson(req, 8 * 1024);
@@ -1002,9 +1007,15 @@ async function adminApi(req, res, url, pathname) {
     const prev = await loadMaint(true);
     const next = maintNormalize(body, prev);
     next.updated_at = new Date().toISOString();
-    if (!(await saveMaint(next))) return sendJson(res, 502, { error: 'Gagal menyimpan. Sudah menjalankan supabase.sql bagian v4.9?' });
+    if (!SB_READY) return sendJson(res, 503, { error: 'Supabase belum terhubung (SUPABASE_URL / SUPABASE_SERVICE_KEY di .env kosong), maintenance tidak bisa disimpan.' });
+    if (!(await saveMaint(next))) return sendJson(res, 502, { error: 'Gagal menyimpan ke database. Jalankan supabase.sql bagian v4.9 (tabel am_settings) lalu coba lagi.' });
+    // Pastikan benar-benar tersimpan: baca ulang dari database, bukan dari memori server
+    const back = await readMaintRaw();
+    if (back === null || maintBool(back.enabled) !== !!next.enabled) {
+      return sendJson(res, 502, { error: 'Pengaturan tidak terbaca ulang dari database. Cek tabel am_settings dan SUPABASE_SERVICE_KEY (harus service_role), lalu coba lagi.' });
+    }
     console.log('[AM Premify] Maintenance ' + (maintOn(next) ? 'AKTIF' : 'nonaktif') + ' (diatur dari ' + clientIp(req) + ')');
-    return sendJson(res, 200, Object.assign({}, next, { active: maintOn(next) }));
+    return sendJson(res, 200, Object.assign({}, next, { active: maintOn(next), db: true, db_ok: true }));
   }
 
   // v5.0 - iklan video sponsor
@@ -1511,6 +1522,16 @@ async function loadMaint(force) {
   return v;
 }
 
+// Baca langsung dari database tanpa cache. null = gagal dibaca (tabel belum ada / Supabase tidak terjangkau).
+async function readMaintRaw() {
+  if (!SB_READY) return null;
+  try {
+    const r = await sb('GET', rest('am_settings?key=eq.maintenance&select=value&limit=1'));
+    if (r.ok && Array.isArray(r.data)) return r.data[0] && r.data[0].value ? r.data[0].value : {};
+  } catch {}
+  return null;
+}
+
 async function saveMaint(m) {
   const r = await sb('POST', rest('am_settings?on_conflict=key'), { key: 'maintenance', value: m, updated_at: m.updated_at },
     { Prefer: 'resolution=merge-duplicates,return=minimal' });
@@ -1566,13 +1587,14 @@ const adsLink = (v) => { try { const p = new URL(maintText(v, 600)); return /^ht
 // Satu iklan: hanya kolom yang dikirim yang diubah. Video & sampul wajib https, tautan klik boleh http/https.
 function adsItem(raw, prev) {
   const b = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
-  const o = Object.assign({ id: '', title: '', sponsor: '', video: '', poster: '', url: '', cta: '', active: true, created_at: '' }, prev || {});
+  const o = Object.assign({ id: '', title: '', sponsor: '', video: '', poster: '', url: '', cta: '', seconds: 0, active: true, created_at: '' }, prev || {});
   if (b.title !== undefined) o.title = maintLine(b.title, 70);
   if (b.sponsor !== undefined) o.sponsor = maintLine(b.sponsor, 40);
   if (b.video !== undefined) o.video = adsHttps(b.video);
   if (b.poster !== undefined) o.poster = adsHttps(b.poster);
   if (b.url !== undefined) o.url = adsLink(b.url);
   if (b.cta !== undefined) o.cta = maintLine(b.cta, 24);
+  if (b.seconds !== undefined) { const n = Math.ceil(Number(b.seconds)); o.seconds = Number.isFinite(n) && n >= 5 ? Math.min(3600, n) : 0; }   // v5.2: durasi iklan (detik), 0 = pakai AD_SECONDS
   if (b.active !== undefined) o.active = maintBool(b.active);
   if (!o.url) o.cta = ''; else if (!o.cta) o.cta = 'Kunjungi Sponsor';
   return o;
@@ -1638,7 +1660,7 @@ async function adsPick() {
   if (!act.length) return null;
   const i = crypto.randomInt(act.length);
   const it = act[i];
-  return { id: it.id, title: it.title, sponsor: it.sponsor, video: it.video, poster: it.poster, cta: it.cta, link: !!it.url, pos: i + 1, total: act.length };
+  return { id: it.id, title: it.title, sponsor: it.sponsor, video: it.video, poster: it.poster, cta: it.cta, link: !!it.url, seconds: it.seconds || 0, pos: i + 1, total: act.length };
 }
 
 // Hapus file video / sampul di Storage bila milik bucket kita (best-effort)
