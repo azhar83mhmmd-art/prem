@@ -146,6 +146,7 @@
             </div>
             <label class="sw" aria-label="Aktifkan mode maintenance"><input type="checkbox" id="mnt-on"><span class="sw-k"></span></label>
           </div>
+          <p class="mnt-warn bad hidden" id="mnt-db" role="alert"><svg class="ic"><use href="#i-alert"/></svg><span></span></p>
           <p class="mnt-warn hidden" id="mnt-warn"><svg class="ic"><use href="#i-alert"/></svg><span>Setelah disimpan, semua pengunjung langsung melihat halaman maintenance dan website tidak bisa dipakai. Kamu (admin) tetap bisa membukanya.</span></p>
 
           <div class="mnt-pre">
@@ -165,7 +166,7 @@
             <span class="field top"><textarea class="input" id="mnt-msg" rows="5" maxlength="600" placeholder="Jelaskan apa yang sedang dikerjakan dan kapan website kembali."></textarea></span></label>
 
           <div class="mnt-l"><span>Estimasi selesai <i>(opsional, tampil sebagai hitung mundur)</i></span>
-            <span class="field"><input class="input" id="mnt-eta" type="datetime-local"><button class="ibtn" id="mnt-eta-x" type="button">Hapus</button></span></div>
+            <span class="field eta-f"><input class="input" id="mnt-eta" type="datetime-local"><button class="ibtn" id="mnt-eta-x" type="button">Hapus</button></span></div>
           <label class="chk mnt-chk"><input type="checkbox" id="mnt-auto"><span>Buka website otomatis saat estimasi lewat</span></label>
 
           <div class="mnt-2">
@@ -178,7 +179,8 @@
           <p class="adm-err" id="mnt-err" role="alert"></p>
           <div class="mnt-acts">
             <button class="btn btn-dark" id="mnt-save" type="button"><svg class="ic"><use href="#i-check"/></svg><span>Simpan</span></button>
-            <a class="ibtn" href="/maintenance?preview=1" target="_blank" rel="noopener"><svg class="ic"><use href="#i-globe"/></svg>Tampilan penuh</a>
+            <a class="ibtn" href="/maintenance" target="_blank" rel="noopener" id="mnt-visitor" title="Buka halaman seperti yang dilihat pengunjung (hanya tampil saat maintenance aktif)"><svg class="ic"><use href="#i-globe"/></svg>Lihat sebagai pengunjung</a>
+            <a class="ibtn" href="/maintenance?preview=1" target="_blank" rel="noopener"><svg class="ic"><use href="#i-globe"/></svg>Pratinjau penuh</a>
           </div>
           <small class="mnt-saved" id="mnt-saved"></small>
         </div>
@@ -212,6 +214,8 @@
           <div class="ad-up hidden" id="ad-vprog"><i></i><b>0%</b></div>
         </div>
         <div class="ad-pv hidden" id="ad-pvbox"><video id="ad-pv" controls muted playsinline preload="metadata"></video></div>
+        <label class="mnt-l"><span>Lama iklan wajib ditonton <i>(detik, otomatis mengikuti panjang video)</i></span>
+          <span class="field"><input class="input" id="ad-secs" type="number" inputmode="numeric" min="5" max="3600" step="1" placeholder="otomatis dari video" autocomplete="off"><em class="ad-secs-u" id="ad-secs-h">dtk</em></span></label>
 
         <div class="mnt-l"><span>Gambar sampul <i>(opsional, tampil sebelum video siap)</i></span>
           <span class="field"><input class="input" id="ad-poster" type="url" inputmode="url" maxlength="600" placeholder="https://… atau unggah" autocomplete="off">
