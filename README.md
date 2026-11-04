@@ -84,3 +84,13 @@ v4.5 - Balasan ulasan, like, room publik, kontrol admin per pengguna, perbaikan 
 - Statistik per iklan: **tayang** = ditonton tuntas (kunci berhasil diklaim), **klik**, dan CTR.
 - WAJIB: jalankan ulang `supabase.sql` bagian v5.0 (tabel am_ad_stats, fungsi am_ad_hit, bucket `ads`), lalu restart server.
 - Catatan: gerbang anti-AdBlock tetap memeriksa server iklan dari skrip pertama di public/ads.html (Adsterra). Isi `AD_PROBE_URL` di .env atau hapus skripnya bila ingin mengubah perilaku itu.
+
+## v5.1 - Perbaikan maintenance, menu admin responsif, popup iklan baru
+- Maintenance: saklar di /admin > Maintenance sekarang LANGSUNG berlaku (muncul konfirmasi, tidak perlu menekan Simpan lagi). Setelah menyimpan, server membaca ulang dari database untuk memastikan benar-benar tersimpan; kalau gagal, pesan jelas muncul (mis. tabel am_settings belum dibuat -> jalankan supabase.sql bagian v4.9). Peringatan merah juga tampil di tab Maintenance bila Supabase/tabel bermasalah.
+- PENTING: admin yang sedang login (cookie /admin) TIDAK ikut ditutup, supaya bisa menguji. Itu sebabnya di browser yang sama dengan admin website terlihat normal. Saat maintenance aktif, pita kuning muncul di atas halaman dengan tombol "Lihat sebagai pengunjung" (buka /maintenance). Pita tidak lagi hilang permanen saat ditutup (hanya sembunyi sampai halaman dimuat ulang). Untuk menguji sungguhan, buka lewat jendela samaran/HP lain, atau keluar dari /admin dulu.
+- Menu admin > Maintenance dan Iklan: layout responsif 320px sampai layar lebar (form + pratinjau dua kolom mulai tablet, tombol penuh di HP, kolom estimasi tidak meluap, tab aktif otomatis tergulir ke tengah).
+- Popup "Tonton Iklan" didesain ulang: kartu gelap kaca dengan cincin hitung mundur, bar gradasi, status "Sedang tayang / Dijeda", animasi sukses +1 Kunci, bottom sheet di HP. Semua id elemen lama dipertahankan.
+
+## v5.2 - Lama iklan mengikuti video, kunci tanpa batas
+- Iklan video sponsor: lama wajib tonton = panjang videonya. Di /admin > Iklan kolom "Lama iklan wajib ditonton" terisi otomatis dari video (unggahan maupun tautan), bisa diubah manual. Iklan lama yang belum punya durasi tetap memakai AD_SECONDS (edit iklan itu lalu simpan agar durasinya terisi). Server yang menentukan durasi di token, jadi tidak bisa dipercepat dari browser. Video panjang tampil sebagai m:ss.
+- Kunci tanpa batas: KEY_MAX dan KEY_DAILY default 0 = tidak dibatasi (tidak perlu menjalankan ulang SQL). Isi angka di .env bila ingin membatasi lagi. Yang tetap berlaku: 1 sesi iklan hanya bisa diklaim sekali dan ada jeda minimum antar klaim.
