@@ -14,6 +14,7 @@ try {
   });
 } catch {}
 
+const APP_VERSION = '5.2.0';
 const PORT = process.env.PORT || 8112;
 const UPSTREAM = process.env.UPSTREAM || 'https://am.noxxyrorr.biz.id';
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
@@ -973,7 +974,10 @@ async function adminApi(req, res, url, pathname) {
   const method = req.method;
 
   if (pathname === '/api/admin/status' && method === 'GET') {
-    return sendJson(res, 200, { configured: !!ADMIN_PASSWORD, supabase: SB_READY, authed: isAdmin(req), strict: BLOCK_FP_STRICT });
+    const okAdm = isAdmin(req);
+    // Konfigurasi yang SEDANG dipakai server (hanya untuk admin): untuk memastikan hosting benar-benar menjalankan versi & .env terbaru
+    return sendJson(res, 200, Object.assign({ configured: !!ADMIN_PASSWORD, supabase: SB_READY, authed: okAdm, strict: BLOCK_FP_STRICT },
+      okAdm ? { ver: APP_VERSION, key_max: KEY_MAX, key_daily: KEY_DAILY, ad_seconds: AD_SECONDS, keys_required: KEYS_REQUIRED } : {}));
   }
   if (pathname === '/api/admin/login' && method === 'POST') return adminLogin(req, res);
   if (pathname === '/api/admin/logout' && method === 'POST') {
@@ -1795,6 +1799,8 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`[AM Premify] Panel aktif di: http://localhost:${PORT}/index`);
   console.log(`[AM Premify] Upstream: ${UPSTREAM}`);
+  console.log(`[AM Premify] v${APP_VERSION} | kunci maks: ${KEY_MAX || 'TANPA BATAS'} | iklan harian maks: ${KEY_DAILY || 'TANPA BATAS'} | iklan cadangan: ${AD_SECONDS} dtk (iklan sponsor mengikuti panjang video)`);
+  if (process.env.KEY_MAX || process.env.KEY_DAILY) console.log('[AM Premify] CATATAN: KEY_MAX / KEY_DAILY terisi di environment hosting / .env, nilainya yang dipakai. Hapus atau isi 0 untuk tanpa batas.');
   if (!process.env.TURNSTILE_SITE_KEY || !process.env.TURNSTILE_SECRET_KEY) {
     console.log('[AM Premify] Turnstile: pakai kunci UJI (selalu lolos). Isi TURNSTILE_SITE_KEY & TURNSTILE_SECRET_KEY di .env untuk produksi.');
   }
