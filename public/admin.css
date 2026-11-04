@@ -249,3 +249,58 @@
 .ad-ac .sw { margin-right: auto; }
 .ads-empty { padding: 26px 16px; text-align: center; background: var(--paper); border: var(--bd); border-radius: 14px; font-weight: 600; }
 @media (max-width: 420px) { .ad-row { grid-template-columns: 92px minmax(0, 1fr); } .ad-th { width: 92px; height: 70px; } }
+
+
+/* ===== v5.1: tab Maintenance & Iklan benar-benar responsif (320px sampai layar lebar) ===== */
+#tab-mnt, #tab-ads { min-width: 0; }
+.mnt { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.mnt-form, .mnt-prev { min-width: 0; }
+.mnt-form { padding: clamp(12px, 3.6vw, 18px); gap: 14px; }
+.mnt-sw-t > div { min-width: 0; }
+.mnt-sw b { overflow-wrap: anywhere; }
+.mnt-sw small { overflow-wrap: anywhere; }
+.mnt-warn span { min-width: 0; overflow-wrap: anywhere; }
+.mnt-warn.bad { background: #ffd9d6; border-color: #b3201f; color: #5c0f0e; }
+.mnt-l .field { min-width: 0; }
+.mnt-l .input { min-width: 0; width: 100%; }
+.mnt-l input[type='datetime-local'].input { appearance: none; -webkit-appearance: none; font-size: 16px; }
+.mnt-l .field.eta-f { flex-wrap: wrap; row-gap: 0; }
+.mnt-l .field.eta-f .input { flex: 1 1 190px; }
+.mnt-l .field.eta-f .ibtn { margin: 6px 0; }
+.mnt-pre .seg { display: flex; flex-wrap: wrap; width: 100%; }
+.mnt-prev iframe { height: clamp(440px, 72dvh, 640px); }
+
+/* tablet & laptop: form di kiri, pratinjau menempel di kanan */
+@media (min-width: 820px) {
+  .mnt { grid-template-columns: minmax(0, 1.1fr) minmax(300px, .9fr); }
+  .mnt-prev { position: sticky; top: 76px; }
+  .mnt-prev iframe { height: min(640px, calc(100dvh - 150px)); min-height: 440px; }
+}
+@media (min-width: 1100px) { .mnt { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; } }
+
+/* HP */
+@media (max-width: 560px) {
+  .adm-main { padding-left: 12px; padding-right: 12px; gap: 14px; }
+  .mnt-sw { padding: 10px 12px; }
+  .mnt-ic { width: 38px; height: 38px; }
+  .mnt-acts { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  .mnt-acts .btn { width: 100%; min-width: 0; }
+  .mnt-acts .ibtn { justify-content: center; min-height: 44px; width: 100%; }
+  .mnt-pre .seg button { flex: 1 1 auto; padding: 9px 12px; }
+  .mnt-l > span { flex-wrap: wrap; }
+  .ads-top .btn { width: 100%; min-width: 0; }
+}
+@media (max-width: 420px) {
+  .mnt-prev-bar small { display: none; }
+  .adm-live b { display: none; }
+  .adm-live { padding: 6px 8px; }
+  .adm-top { gap: 8px; padding-left: 12px; padding-right: 12px; }
+  .adm-tab { padding: 10px 11px; font-size: .8rem; gap: 6px; }
+}
+@media (max-width: 340px) { .sw { width: 52px; } .sw input:checked + .sw-k::after { transform: translateX(20px); } }
+.adm-tabs { scroll-snap-type: x proximity; scroll-padding: 0 12px; }
+.adm-tab { scroll-snap-align: center; }
+
+/* v5.2: kolom durasi iklan */
+.ad-secs-u { flex: none; font: 700 .68rem var(--mono); font-style: normal; color: #6d6859; padding-right: 2px; }
+.mnt-l .field input[type='number'].input { appearance: textfield; -moz-appearance: textfield; font-size: 16px; }
