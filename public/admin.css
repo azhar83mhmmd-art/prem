@@ -304,3 +304,6 @@
 /* v5.2: kolom durasi iklan */
 .ad-secs-u { flex: none; font: 700 .68rem var(--mono); font-style: normal; color: #6d6859; padding-right: 2px; }
 .mnt-l .field input[type='number'].input { appearance: textfield; -moz-appearance: textfield; font-size: 16px; }
+
+.ads-cfg { margin: 0 0 12px; padding: 8px 12px; background: var(--paper); border: 2px dashed var(--ink); border-radius: 12px; font: 700 .7rem/1.5 var(--mono); color: #5a5648; overflow-wrap: anywhere; }
+.ads-cfg.hidden { display: none; }
