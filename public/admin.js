@@ -730,6 +730,14 @@
     $('#mnt-saved').textContent = d && d.updated_at ? 'Terakhir disimpan ' + stamp(d.updated_at) : '';
   }
 
+  function mntDb(d) {
+    const el = $('#mnt-db'); if (!el) return;
+    const bad = d && (d.db === false || d.db_ok === false);
+    el.classList.toggle('hidden', !bad);
+    $('span', el).textContent = d && d.db === false
+      ? 'Supabase belum terhubung (SUPABASE_URL / SUPABASE_SERVICE_KEY kosong di .env). Maintenance tidak akan tersimpan.'
+      : 'Tabel pengaturan (am_settings) tidak terbaca dari database. Jalankan supabase.sql bagian v4.9 di Supabase, pastikan SUPABASE_SERVICE_KEY adalah kunci service_role, lalu muat ulang halaman ini.';
+  }
   async function loadMnt(force) {
     if (S.mnt.dirty && !force) return;
     try {
@@ -737,6 +745,7 @@
       S.mnt.active = !!d.active;
       if (!S.mnt.dirty || force) { mntFill(d); S.mnt.dirty = false; }
       S.mnt.loaded = true;
+      mntDb(d);
       mntStatus(); mntSavedNote(d);
       $('#mnt-badge').classList.toggle('hidden', !d.active);
       mntPreviewSoon();
@@ -746,17 +755,19 @@
   async function mntSave() {
     const body = mntForm();
     $('#mnt-err').textContent = '';
-    if (body.contact_url && !/^https?:\/\//i.test(body.contact_url)) { $('#mnt-err').textContent = 'Tautan tombol harus diawali https://'; $('#mnt-curl').focus(); return; }
-    if (body.eta && Date.parse(body.eta) <= Date.now() && body.auto_open) { $('#mnt-err').textContent = 'Estimasi sudah lewat, website akan langsung terbuka otomatis. Ubah estimasi atau matikan opsi buka otomatis.'; return; }
+    if (body.contact_url && !/^https?:\/\//i.test(body.contact_url)) { $('#mnt-err').textContent = 'Tautan tombol harus diawali https://'; $('#mnt-curl').focus(); return false; }
+    if (body.eta && Date.parse(body.eta) <= Date.now() && body.auto_open) { $('#mnt-err').textContent = 'Estimasi sudah lewat, website akan langsung terbuka otomatis. Ubah estimasi atau matikan opsi buka otomatis.'; return false; }
+    let saved = false;
     const apply = async () => {
       S.mnt.saving = true; mntStatus();
       try {
         const d = await api('/api/admin/maintenance', { method: 'POST', body });
         S.mnt.active = !!d.active; S.mnt.dirty = false;
-        mntFill(d); mntSavedNote(d);
+        mntFill(d); mntSavedNote(d); mntDb(d);
         $('#mnt-badge').classList.toggle('hidden', !d.active);
         toast(d.active ? 'Maintenance AKTIF. Website ditutup untuk pengunjung' : 'Tersimpan. Website berjalan normal', d.active ? '' : 'ok');
         mntPreviewSoon();
+        saved = true;
       } finally { S.mnt.saving = false; mntStatus(); }
     };
     try {
@@ -769,20 +780,27 @@
           items: [
             'Halaman diganti dan semua API publik ditolak di server',
             'Halaman yang sedang dibuka pengunjung tertutup dalam hitungan detik',
-            'Kamu (admin) tetap bisa membuka website untuk uji coba'
+            'Kamu (admin) tetap bisa membuka website untuk uji coba. Pakai tombol "Lihat sebagai pengunjung" untuk melihat tampilan aslinya'
           ],
           confirmText: 'Aktifkan sekarang', busyText: 'Menyimpan…',
           onConfirm: apply
         });
-        if (!r) return;
+        if (!r) return false;
       } else await apply();
-    } catch (e) { if (e.message !== 'Sesi berakhir') $('#mnt-err').textContent = e.message; }
+    } catch (e) { if (e.message !== 'Sesi berakhir') $('#mnt-err').textContent = e.message; return false; }
+    return saved;
   }
 
   const mntTab = $('#tab-mnt');
   mntTab.addEventListener('input', () => { S.mnt.dirty = true; mntCounts(); mntStatus(); mntPreviewSoon(); });
   $('#mnt-eta-x').addEventListener('click', () => { $('#mnt-eta').value = ''; S.mnt.dirty = true; mntPreviewSoon(); });
   $('#mnt-save').addEventListener('click', mntSave);
+  // Saklar langsung berlaku (tidak perlu menekan Simpan lagi). Batal / gagal => saklar kembali seperti semula.
+  $('#mnt-on').addEventListener('change', async () => {
+    if ($('#mnt-on').checked === S.mnt.active) { mntStatus(); return; }
+    const ok = await mntSave();
+    if (!ok) { $('#mnt-on').checked = S.mnt.active; mntStatus(); mntPreviewSoon(); }
+  });
   $('#mnt-frame').addEventListener('load', () => { if (S.mnt.loaded) mntPreviewSoon(); });
   $('#mnt-presets').addEventListener('click', (e) => {
     const b = e.target.closest('button[data-p]'); if (!b) return;
@@ -794,6 +812,7 @@
 
   /* ---------- Iklan video sponsor (v5.0) ---------- */
   const adNum = (n) => Number(n || 0).toLocaleString('id-ID');
+  const adDur = (n) => { n = Math.round(Number(n) || 0); if (n < 1) return ''; const m = Math.floor(n / 60), r = n % 60; return m ? (r ? m + ' mnt ' + r + ' dtk' : m + ' mnt') : n + ' dtk'; };
 
   function adRow(it) {
     const ctr = it.views ? Math.round((it.clicks / it.views) * 1000) / 10 : 0;
@@ -806,7 +825,7 @@
         <b>${esc(it.title)}</b>
         <small>${esc(it.sponsor || 'Tanpa nama sponsor')}</small>
         <small class="ad-url">${it.url ? I('link') + '<span>' + esc(it.url) + '</span>' : 'Tanpa tautan klik'}</small>
-        <div class="ad-st"><span>${adNum(it.views)} tayang</span><span>${adNum(it.clicks)} klik</span><span>CTR ${ctr}%</span></div>
+        <div class="ad-st"><span>${it.seconds ? adDur(it.seconds) : 'default'}</span><span>${adNum(it.views)} tayang</span><span>${adNum(it.clicks)} klik</span><span>CTR ${ctr}%</span></div>
       </div>
       <div class="ad-ac">
         <label class="sw" aria-label="Aktifkan iklan"><input type="checkbox" data-act="toggle"${it.active ? ' checked' : ''}><span class="sw-k"></span></label>
@@ -851,6 +870,11 @@
     const u = $('#ad-video').value.trim(), box = $('#ad-pvbox'), v = $('#ad-pv');
     if (/^https:\/\//i.test(u)) {
       if (v.dataset.src !== u) { v.dataset.src = u; v.src = u; v.poster = $('#ad-poster').value.trim(); }
+      v.onloadedmetadata = () => {
+        const d = Math.ceil(v.duration);
+        const f = $('#ad-secs');
+        if (Number.isFinite(d) && d >= 1 && f.dataset.auto !== '0') { f.value = String(Math.max(5, d)); $('#ad-secs-h').textContent = 'dtk · dari video (' + adDur(d) + ')'; }
+      };
       box.classList.remove('hidden');
     } else { v.removeAttribute('src'); v.dataset.src = ''; box.classList.add('hidden'); }
   }
@@ -862,6 +886,8 @@
     $('#ad-sponsor').value = it ? it.sponsor : '';
     $('#ad-video').value = it ? it.video : '';
     $('#ad-poster').value = it ? it.poster : '';
+    const sf = $('#ad-secs'); sf.value = it && it.seconds ? String(it.seconds) : ''; sf.dataset.auto = it && it.seconds ? '0' : '1';
+    $('#ad-secs-h').textContent = 'dtk';
     $('#ad-url').value = it ? it.url : '';
     $('#ad-cta').value = it ? it.cta : '';
     $('#ad-active').checked = it ? !!it.active : true;
@@ -909,6 +935,7 @@
     const btn = $(kind === 'v' ? '#ad-vup' : '#ad-pup'); btn.disabled = true;
     try {
       const url = await adsUpload(f, kind);
+      if (kind === 'v') $('#ad-secs').dataset.auto = '1';
       $(kind === 'v' ? '#ad-video' : '#ad-poster').value = url;
       adsPreview();
       toast(kind === 'v' ? 'Video terunggah' : 'Sampul terunggah');
@@ -924,8 +951,10 @@
       op: 'save', id: a.editing,
       title: $('#ad-title').value.trim(), sponsor: $('#ad-sponsor').value.trim(),
       video: $('#ad-video').value.trim(), poster: $('#ad-poster').value.trim(),
-      url: $('#ad-url').value.trim(), cta: $('#ad-cta').value.trim(), active: $('#ad-active').checked
+      url: $('#ad-url').value.trim(), cta: $('#ad-cta').value.trim(), active: $('#ad-active').checked,
+      seconds: Math.max(0, Math.ceil(Number($('#ad-secs').value) || 0))
     };
+    if (body.seconds && body.seconds < 5) { err.textContent = 'Lama iklan minimal 5 detik (atau kosongkan agar otomatis).'; $('#ad-secs').focus(); return; }
     if (!body.title) { err.textContent = 'Judul iklan wajib diisi.'; $('#ad-title').focus(); return; }
     if (!/^https:\/\//i.test(body.video)) { err.textContent = 'Video wajib diisi: unggah file atau tempel tautan https://.'; $('#ad-video').focus(); return; }
     if (body.poster && !/^https:\/\//i.test(body.poster)) { err.textContent = 'Tautan sampul harus diawali https://'; $('#ad-poster').focus(); return; }
@@ -969,7 +998,8 @@
   $('#ads-save').addEventListener('click', adsSave);
   $('#ads-form').addEventListener('submit', (e) => e.preventDefault());
   $('#ads-form').addEventListener('input', () => { adsCounts(); });
-  $('#ad-video').addEventListener('change', adsPreview);
+  $('#ad-secs').addEventListener('input', () => { $('#ad-secs').dataset.auto = $('#ad-secs').value === '' ? '1' : '0'; });
+  $('#ad-video').addEventListener('change', () => { const f = $('#ad-secs'); f.dataset.auto = '1'; adsPreview(); });
   $('#ad-poster').addEventListener('change', () => { const v = $('#ad-pv'); v.poster = $('#ad-poster').value.trim(); });
   $('#ad-vup').addEventListener('click', () => $('#ad-vfile').click());
   $('#ad-pup').addEventListener('click', () => $('#ad-pfile').click());
