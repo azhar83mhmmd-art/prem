@@ -850,7 +850,22 @@
       : '<div class="ads-empty">Belum ada iklan sponsor. Tekan <b>Tambah Iklan</b>, unggah video yang dikirim sponsor, lalu isi tautan tujuannya.</div>';
   }
 
+  // Cek versi & konfigurasi server yang benar-benar berjalan di hosting
+  async function adsSrvCheck() {
+    try {
+      const st = await api('/api/admin/status');
+      const old = $('#ads-old'), cfg = $('#ads-cfg');
+      if (!st.ver) {
+        $('span', old).textContent = 'Server di hosting masih versi LAMA (belum v5.2): lama iklan tetap 15 detik dan kunci maks 5. Upload ulang server.js dan semua file terbaru, lalu RESTART server / aplikasi di hosting.';
+        old.classList.remove('hidden'); cfg.classList.add('hidden'); return;
+      }
+      const envNote = (st.key_max > 0 || st.key_daily > 0) ? ' · batas dari KEY_MAX / KEY_DAILY di environment hosting (hapus atau isi 0 agar tanpa batas)' : '';
+      cfg.textContent = 'Server v' + st.ver + ' · kunci maks: ' + (st.key_max || 'tanpa batas') + ' · iklan per hari: ' + (st.key_daily || 'tanpa batas') + ' · iklan cadangan: ' + st.ad_seconds + ' dtk' + envNote;
+      cfg.classList.remove('hidden'); old.classList.add('hidden');
+    } catch {}
+  }
   async function loadAds(force) {
+    if (force || !S.ads.checked) { S.ads.checked = true; adsSrvCheck(); }
     try {
       const d = await api('/api/admin/ads');
       const a = S.ads;
