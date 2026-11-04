@@ -4,6 +4,9 @@
   'use strict';
   const $ = (s, el = document) => el.querySelector(s);
   const S = { keys: 0, required: true, seconds: 15, max: 5, daily: 30, adUrl: '/ads', loaded: false };
+  // v5.2: iklan bisa panjang (mengikuti video). >= 100 dtk tampil sebagai m:ss
+  const fmtClock = (n) => { n = Math.max(0, Math.ceil(n)); return n >= 100 ? Math.floor(n / 60) + ':' + String(n % 60).padStart(2, '0') : String(n); };
+  const fmtLong = (n) => { n = Math.round(n); const m = Math.floor(n / 60), r = n % 60; return m ? (r ? m + ' menit ' + r + ' detik' : m + ' menit') : n + ' detik'; };
   const say = (msg, type) => { try { if (typeof toast === 'function') toast(msg, type); } catch {} };
   const log = (type, msg) => { try { if (typeof term !== 'undefined') term.log(type, msg); } catch {} };
 
@@ -12,6 +15,8 @@
   const retryBtn = $('#ad-retry'), cancelBtn = $('#ad-cancel');
   const promoBox = $('#ad-promo'), frameWrap = $('#ad-frame-wrap'), pv = $('#promo-video');
   const promoLeft = $('#promo-left'), pPlay = $('#promo-play'), pMute = $('#promo-mute');
+  const ring = $('#ad-ring'), live = $('#ad-live');
+  const CIRC = 2 * Math.PI * 28;   // keliling cincin hitung mundur (r = 28)
 
   async function call(url, body) {
     const opts = body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
@@ -27,11 +32,12 @@
     card.classList.toggle('empty', S.required && S.keys < 1);
     count.textContent = S.required ? String(S.keys) : '\u221E';
     if (!S.required) hint.textContent = 'Akses developer: tanpa kunci.';
-    else if (S.keys < 1) hint.textContent = `Kunci habis. Tonton 1 iklan (${S.seconds} detik) untuk mendapat 1 kunci. 1 kunci = 1 akun premium.`;
-    else hint.textContent = `1 kunci dipakai tiap akun berhasil jadi premium. Kamu bisa menabung sampai ${S.max} kunci.`;
+    else if (S.keys < 1) hint.textContent = 'Kunci habis. Tonton 1 iklan sampai selesai untuk mendapat 1 kunci. 1 kunci = 1 akun premium.';
+    else hint.textContent = S.max > 0 ? `1 kunci dipakai tiap akun berhasil jadi premium. Kamu bisa menabung sampai ${S.max} kunci.` : '1 kunci dipakai tiap akun berhasil jadi premium. Tonton iklan sebanyak yang kamu mau, kunci bisa ditabung tanpa batas.';
+    const full = S.max > 0 && S.keys >= S.max;   // max 0 = tanpa batas
     watchBtn.classList.toggle('hidden', !S.required);
-    watchBtn.disabled = S.required && S.keys >= S.max;
-    $('span', watchBtn).textContent = S.keys >= S.max ? 'Kunci Penuh' : 'Tonton Iklan (+1 Kunci)';
+    watchBtn.disabled = S.required && full;
+    $('span', watchBtn).textContent = full ? 'Kunci Penuh' : 'Tonton Iklan (+1 Kunci)';
   }
 
   async function refresh() {
@@ -50,9 +56,12 @@
   function setMsg(text, err) { msgEl.textContent = text; msgEl.classList.toggle('err', !!err); }
   function setProgress(left) {
     const done = S.seconds - left;
-    bar.style.width = Math.max(0, Math.min(100, (done / S.seconds) * 100)) + '%';
-    secEl.textContent = left > 0 ? String(Math.ceil(left)) : '0';
-    if (promoLeft) promoLeft.textContent = left > 0 ? 'Selesai ' + Math.ceil(left) + ' dtk' : 'Selesai';
+    const pct = Math.max(0, Math.min(100, (done / S.seconds) * 100));
+    bar.style.width = pct + '%';
+    if (ring) { ring.style.strokeDasharray = CIRC.toFixed(2); ring.style.strokeDashoffset = (CIRC * (1 - pct / 100)).toFixed(2); }
+    secEl.textContent = left > 0 ? fmtClock(left) : '0';
+    secEl.parentNode.classList.toggle('long', left >= 100);
+    if (promoLeft) promoLeft.textContent = left > 0 ? 'Selesai ' + (left >= 100 ? fmtClock(left) : Math.ceil(left) + ' dtk') : 'Selesai';
   }
 
   /* ---------- pemutar iklan video sponsor (v5.0) ---------- */
@@ -102,9 +111,15 @@
   pMute.addEventListener('click', () => { pv.muted = !pv.muted; syncMuteIcon(); if (pv.paused && !(run && run.userPaused)) pv.play().catch(() => {}); });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && run && run.promo && !run.userPaused) pv.play().catch(() => {}); });
 
-  function openModal() { modal.classList.remove('hidden'); document.body.classList.add('no-scroll'); }
+  function resetUi() {
+    modal.classList.remove('done', 'paused');
+    if (live) live.textContent = 'Sedang tayang';
+    if (ring) { ring.style.strokeDasharray = CIRC.toFixed(2); ring.style.strokeDashoffset = CIRC.toFixed(2); }
+  }
+  function openModal() { resetUi(); modal.classList.remove('hidden'); document.body.classList.add('no-scroll'); }
   function closeModal() {
     modal.classList.add('hidden');
+    modal.classList.remove('done', 'paused');
     document.body.classList.remove('no-scroll');
     frame.removeAttribute('src');
     stopPromo();
@@ -132,9 +147,12 @@
       run.earned = true;
       setMsg('Kunci didapat! +1');
       secEl.textContent = '\u2713';
+      modal.classList.remove('paused');
+      modal.classList.add('done');
+      try { if (navigator.vibrate) navigator.vibrate([18, 40, 28]); } catch {}
       say('+1 kunci premium');
       log('ok', `Kunci bertambah. Saldo: ${S.keys}`);
-      setTimeout(closeModal, 700);
+      setTimeout(closeModal, 1500);
       return;
     }
     const d = r.data || {};
@@ -150,9 +168,11 @@
     const dt = (now - run.last) / 1000;
     run.last = now;
     // Waktu hanya berjalan saat tab terlihat (pindah tab = iklan berhenti dihitung)
-    if (document.visibilityState === 'visible') run.left -= dt;
-    else setMsg('Kembali ke halaman ini agar iklan terus dihitung.');
-    if (document.visibilityState === 'visible') setMsg('Tonton iklan sampai hitungan selesai.');
+    const vis = document.visibilityState === 'visible';
+    if (vis) run.left -= dt;
+    modal.classList.toggle('paused', !vis);
+    if (live) live.textContent = vis ? 'Sedang tayang' : 'Dijeda';
+    setMsg(vis ? 'Tonton iklan sampai hitungan selesai.' : 'Kembali ke halaman ini agar iklan terus dihitung.');
     setProgress(run.left);
     if (run.left <= 0) { clearInterval(run.timer); claim(); }
   }
@@ -161,6 +181,7 @@
     setMsg('Menyiapkan iklan...');
     secEl.textContent = '...';
     bar.style.width = '0%';
+    resetUi();
     retryBtn.classList.add('hidden');
     let r;
     try { r = await call('/api/ad/start', {}); } catch { r = { ok: false, data: { error: 'Gagal terhubung ke server.' } }; }
@@ -174,6 +195,7 @@
       return;
     }
     S.seconds = d.seconds || S.seconds;
+    $('#ad-total').textContent = fmtLong(S.seconds);
     run.token = d.token;
     run.left = S.seconds;
     run.last = performance.now();
@@ -191,7 +213,7 @@
     if (!S.required) return Promise.resolve(true);
     run = { token: '', left: 0, last: 0, timer: 0, earned: false };
     run.promise = new Promise((resolve) => { run.resolve = resolve; });
-    $('#ad-total').textContent = S.seconds;
+    $('#ad-total').textContent = '...';
     openModal();
     start();
     return run.promise;
