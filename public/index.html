@@ -571,15 +571,18 @@
 
 </main>
 
-<footer class="footer">AM Premify v4.8.4 &bull; Developer kenz</footer>
-<div id="ad-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="ad-title">
-  <div class="modal-card ad-card">
-    <div class="modal-stripe"></div>
-    <div class="modal-body">
-      <div class="ad-top">
-        <h3 id="ad-title">TONTON IKLAN</h3>
+<footer class="footer">AM Premify v5.1 &bull; Developer kenz</footer>
+<div id="ad-modal" class="modal ad-modal hidden" role="dialog" aria-modal="true" aria-labelledby="ad-title">
+  <div class="adx-card">
+    <div class="adx-aura" aria-hidden="true"></div>
+    <div class="adx-body">
+      <header class="adx-top">
+        <div class="adx-head">
+          <span class="adx-live"><i></i><em id="ad-live">Sedang tayang</em></span>
+          <h3 id="ad-title">Tonton &amp; dapatkan kunci</h3>
+        </div>
         <button class="ad-x" id="ad-x" type="button" aria-label="Tutup"><svg class="ic sm"><use href="#i-x"/></svg></button>
-      </div>
+      </header>
       <p class="ad-sub">Tonton sampai hitungan selesai untuk mendapat <b>1 kunci</b>. Tetap di halaman ini, waktu berhenti kalau kamu pindah tab.</p>
       <div class="promo hidden" id="ad-promo">
         <div class="promo-head">
@@ -600,15 +603,30 @@
         <a class="promo-cta hidden" id="promo-cta" target="_blank" rel="noopener sponsored"><span id="promo-cta-t">Kunjungi Sponsor</span><svg class="ic"><use href="#i-arrow"/></svg></a>
       </div>
       <div class="ad-frame-wrap" id="ad-frame-wrap"><iframe id="ad-frame" title="Iklan" referrerpolicy="no-referrer" loading="eager"></iframe></div>
-      <div class="ad-prog">
-        <div class="ad-track"><i id="ad-bar"></i></div>
-        <div class="ad-sec"><b id="ad-sec">...</b> / <span id="ad-total">15</span> dtk</div>
+      <div class="adx-prog">
+        <div class="adx-ring">
+          <svg viewBox="0 0 64 64" aria-hidden="true">
+            <defs><linearGradient id="adx-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd23f"/><stop offset=".55" stop-color="#ff8fab"/><stop offset="1" stop-color="#7cc6fe"/></linearGradient></defs>
+            <circle class="rb" cx="32" cy="32" r="28"/><circle class="rf" id="ad-ring" cx="32" cy="32" r="28"/>
+          </svg>
+          <div class="ad-sec"><b id="ad-sec">...</b><small>dtk</small></div>
+        </div>
+        <div class="adx-info">
+          <span class="adx-rew"><svg class="ic sm"><use href="#i-key"/></svg>Hadiah: +1 Kunci Premium</span>
+          <p class="ad-msg" id="ad-msg" role="status" aria-live="polite">Menyiapkan iklan...</p>
+          <div class="ad-track"><i id="ad-bar"></i></div>
+          <small class="adx-tot">Durasi <span id="ad-total">...</span></small>
+        </div>
       </div>
-      <p class="ad-msg" id="ad-msg">Menyiapkan iklan...</p>
       <div class="ad-btns">
         <button class="btn btn-dark hidden" id="ad-retry" type="button"><svg class="ic"><use href="#i-refresh"/></svg><span>Coba Lagi</span></button>
         <button class="btn btn-sand" id="ad-cancel" type="button"><svg class="ic"><use href="#i-x"/></svg><span>Batal</span></button>
       </div>
+    </div>
+    <div class="adx-done" aria-live="polite">
+      <div class="ck"><span class="cf" aria-hidden="true"><i style="--a:0deg"></i><i style="--a:36deg"></i><i style="--a:72deg"></i><i style="--a:108deg"></i><i style="--a:144deg"></i><i style="--a:180deg"></i><i style="--a:216deg"></i><i style="--a:252deg"></i><i style="--a:288deg"></i><i style="--a:324deg"></i></span><svg class="ic"><use href="#i-check"/></svg></div>
+      <b>+1 Kunci!</b>
+      <small>Kunci premium sudah masuk ke saldomu.</small>
     </div>
   </div>
 </div>
