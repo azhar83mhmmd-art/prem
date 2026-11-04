@@ -17,7 +17,7 @@
     eta: '', contact_label: '', contact_url: ''
   };
 
-  let state = null, host = null, sh = null, pillHost = null, shown = false, offset = 0, busy = false, tickT = 0, btnT = 0;
+  let state = null, host = null, sh = null, pillHost = null, pillHidden = false, shown = false, offset = 0, busy = false, tickT = 0, btnT = 0;
 
   /* ---------- tampilan ---------- */
   const CSS = `
@@ -94,12 +94,17 @@ h1{margin:18px 0 12px;font-size:clamp(1.6rem,6.2vw,2.2rem);font-weight:800;line-
 .foot{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:24px;padding-top:16px;border-top:1px solid rgba(255,255,255,.07);
   font:500 .68rem 'JetBrains Mono',ui-monospace,monospace;letter-spacing:.08em;color:#667091;text-transform:uppercase}
 
-.pill{position:fixed;top:max(8px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:1;display:flex;align-items:center;gap:9px;max-width:calc(100vw - 16px);
-  padding:6px 8px 6px 12px;border-radius:999px;background:rgba(10,11,18,.92);color:#ffd166;border:1px solid rgba(255,184,0,.4);box-shadow:0 8px 30px rgba(0,0,0,.4);
-  font:600 .66rem/1.2 'JetBrains Mono',ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;pointer-events:auto}
-.pill a,.pill button{flex:none;padding:5px 9px;border-radius:99px;border:0;background:rgba(255,184,0,.16);color:#ffd166;font:inherit;text-decoration:none;cursor:pointer}
-.pill span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-@media (max-width:420px){.card{padding:28px 18px 20px;border-radius:26px}.acts .btn{flex-basis:100%}.pill span{display:none}.pill::before{content:'Maintenance aktif';white-space:nowrap}}
+.pill{position:fixed;top:max(8px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:1;display:flex;align-items:center;gap:8px;width:max-content;max-width:calc(100vw - 16px);
+  padding:6px 6px 6px 12px;border-radius:999px;background:rgba(10,11,18,.94);color:#ffd166;border:1px solid rgba(255,184,0,.45);box-shadow:0 8px 30px rgba(0,0,0,.45);
+  font:600 .66rem/1.2 'JetBrains Mono',ui-monospace,monospace;letter-spacing:.06em;text-transform:uppercase;pointer-events:auto}
+.pill a,.pill button{flex:none;padding:6px 10px;border-radius:99px;border:0;background:rgba(255,184,0,.16);color:#ffd166;font:inherit;text-decoration:none;cursor:pointer;white-space:nowrap}
+.pill a:hover,.pill button:hover{background:rgba(255,184,0,.3)}
+.pill a.pv{background:#ffd166;color:#1a1300}
+.pill .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.pill .s{display:none}
+@media (max-width:560px){.pill .t{display:none}.pill .s{display:inline;white-space:nowrap}}
+@media (max-width:380px){.pill{gap:6px;padding-left:10px}.pill a,.pill button{padding:6px 8px}.pill .s{display:none}}
+@media (max-width:420px){.card{padding:28px 18px 20px;border-radius:26px}.acts .btn{flex-basis:100%}}
 @media (prefers-reduced-motion:reduce){*,*::before{animation:none!important;transition:none!important}}
 `;
 
@@ -237,14 +242,19 @@ h1{margin:18px 0 12px;font-size:clamp(1.6rem,6.2vw,2.2rem);font-weight:800;line-
     if (shown) { shown = false; lock(false); }
   }
 
-  /* Pita kecil untuk admin: website tetap bisa dipakai saat maintenance aktif */
+  /* Pita kecil untuk admin: website tetap bisa dipakai saat maintenance aktif.
+     Admin TIDAK ikut ditutup (sengaja, supaya bisa menguji), jadi pita ini penanda bahwa maintenance sedang AKTIF
+     dan tombol untuk melihat tampilan persis seperti yang dilihat pengunjung. Tombol x hanya menyembunyikan sampai halaman dimuat ulang. */
   function showPill() {
-    if (pillHost || sessionStorage.getItem('am_mt_pill') === '0') return;
+    if (pillHost || pillHidden) return;
     pillHost = document.createElement('div');
     pillHost.style.cssText = 'position:fixed;inset:0;z-index:2147483647;pointer-events:none;';
     const s = pillHost.attachShadow({ mode: 'open' });
-    s.innerHTML = '<style>' + CSS + '</style><div class="pill"><i class="dot"></i><span>Maintenance aktif · hanya admin yang bisa membuka situs</span><a href="/admin#mnt">Kelola</a><button type="button" aria-label="Tutup">×</button></div>';
-    s.querySelector('button').addEventListener('click', () => { try { sessionStorage.setItem('am_mt_pill', '0'); } catch {} removePill(); });
+    s.innerHTML = '<style>' + CSS + '</style><div class="pill" role="status"><i class="dot"></i>' +
+      '<span class="t">Maintenance AKTIF · pengunjung tidak bisa membuka situs</span><span class="s">Maintenance aktif</span>' +
+      '<a class="pv" href="/maintenance" target="_blank" rel="noopener">Lihat sebagai pengunjung</a>' +
+      '<a href="/admin#mnt">Kelola</a><button type="button" aria-label="Sembunyikan">×</button></div>';
+    s.querySelector('button').addEventListener('click', () => { pillHidden = true; removePill(); });
     document.documentElement.appendChild(pillHost);
   }
   function removePill() { if (pillHost) { pillHost.remove(); pillHost = null; } }
